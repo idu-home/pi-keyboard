@@ -1,0 +1,421 @@
+/* 重置样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 头部样式 */
+header {
+    text-align: center;
+    margin-bottom: 20px;
+    color: white;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 5px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+header p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+/* 主要内容区域 */
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 统计信息区域 */
+.stats-section {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.stats-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1.2rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.stat-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.stat-value.success {
+    color: #28a745;
+}
+
+.stat-value.warning {
+    color: #ffc107;
+}
+
+.stat-value.error {
+    color: #dc3545;
+}
+
+.refresh-btn {
+    background: #17a2b8;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+    background: #138496;
+}
+
+/* 文本输入区域 */
+.text-input-section {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#textInput {
+    flex: 1;
+    min-width: 200px;
+    min-height: 60px;
+    padding: 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 16px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+#textInput:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.send-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 120px;
+}
+
+.send-btn:hover {
+    background: #5a6fd8;
+    transform: translateY(-2px);
+}
+
+.send-btn:active {
+    transform: translateY(0);
+}
+
+/* 键盘区域 */
+.keyboard-section {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    flex: 1;
+}
+
+.keyboard-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.key {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+    min-width: 50px;
+    flex: 1;
+    max-width: 80px;
+}
+
+.key:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.key:active {
+    transform: translateY(0);
+    background: #dee2e6;
+}
+
+.key.pressed {
+    background: #667eea;
+    color: white;
+    transform: scale(0.95);
+}
+
+/* 特殊按键样式 */
+.key.special {
+    background: #ffc107;
+    color: #000;
+}
+
+.key.special:hover {
+    background: #ffb300;
+}
+
+.key.modifier {
+    background: #28a745;
+    color: white;
+}
+
+.key.modifier:hover {
+    background: #218838;
+}
+
+.key.space {
+    flex: 3;
+    max-width: 300px;
+}
+
+/* 方向键布局 */
+.arrow-row {
+    justify-content: center;
+}
+
+.arrow-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.arrow-bottom {
+    display: flex;
+    gap: 5px;
+}
+
+.key.arrow {
+    min-width: 45px;
+    min-height: 45px;
+    max-width: 45px;
+    background: #6c757d;
+    color: white;
+    font-size: 18px;
+}
+
+.key.arrow:hover {
+    background: #5a6268;
+}
+
+/* 状态显示 */
+.status-section {
+    background: rgba(255,255,255,0.9);
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    margin-top: auto;
+}
+
+.status-display {
+    font-size: 16px;
+    font-weight: 600;
+    color: #28a745;
+}
+
+.status-display.error {
+    color: #dc3545;
+}
+
+.status-display.loading {
+    color: #ffc107;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .container {
+        padding: 5px;
+    }
+    
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .keyboard-section {
+        padding: 15px;
+    }
+    
+    .key {
+        min-height: 45px;
+        min-width: 45px;
+        max-width: 70px;
+        font-size: 14px;
+    }
+    
+    .input-group {
+        flex-direction: column;
+    }
+    
+    #textInput {
+        min-width: 100%;
+    }
+    
+    .send-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    header h1 {
+        font-size: 1.8rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .keyboard-section {
+        padding: 10px;
+    }
+    
+    .keyboard-row {
+        gap: 5px;
+        margin-bottom: 5px;
+    }
+    
+    .key {
+        min-height: 40px;
+        min-width: 40px;
+        max-width: 60px;
+        font-size: 12px;
+    }
+    
+    .key.arrow {
+        min-width: 38px;
+        min-height: 38px;
+        max-width: 38px;
+        font-size: 16px;
+    }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+    .key:hover {
+        background: #f8f9fa;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .key:active {
+        background: #667eea;
+        color: white;
+        transform: scale(0.95);
+    }
+}
+
+/* 加载动画 */
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 按键按下效果 */
+@keyframes keyPress {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+
+.key.animate {
+    animation: keyPress 0.15s ease-in-out;
+} 

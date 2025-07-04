@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Pi Keyboard - 远程键盘</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pi Keyboard</h1>
+            <p>远程键盘控制</p>
+        </header>
+
+        <main>
+            <!-- 统计信息区域 -->
+            <section class="stats-section">
+                <h3>系统状态</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">总请求数</span>
+                        <span class="stat-value" id="totalRequests">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">成功率</span>
+                        <span class="stat-value" id="successRate">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">平均延迟</span>
+                        <span class="stat-value" id="avgLatency">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">处理状态</span>
+                        <span class="stat-value" id="processingStatus">-</span>
+                    </div>
+                </div>
+                <button id="refreshStats" class="refresh-btn">刷新统计</button>
+            </section>
+
+            <!-- 文本输入区域 -->
+            <section class="text-input-section">
+                <div class="input-group">
+                    <textarea id="textInput" placeholder="在此输入文本，然后点击发送按钮"></textarea>
+                    <button id="sendText" class="send-btn">发送文本</button>
+                </div>
+            </section>
+
+            <!-- 键盘区域 -->
+            <section class="keyboard-section">
+                <!-- 数字行 -->
+                <div class="keyboard-row">
+                    <button class="key" data-key="1">1</button>
+                    <button class="key" data-key="2">2</button>
+                    <button class="key" data-key="3">3</button>
+                    <button class="key" data-key="4">4</button>
+                    <button class="key" data-key="5">5</button>
+                    <button class="key" data-key="6">6</button>
+                    <button class="key" data-key="7">7</button>
+                    <button class="key" data-key="8">8</button>
+                    <button class="key" data-key="9">9</button>
+                    <button class="key" data-key="0">0</button>
+                    <button class="key special" data-key="backspace">⌫</button>
+                </div>
+
+                <!-- 第一行字母 -->
+                <div class="keyboard-row">
+                    <button class="key" data-key="q">Q</button>
+                    <button class="key" data-key="w">W</button>
+                    <button class="key" data-key="e">E</button>
+                    <button class="key" data-key="r">R</button>
+                    <button class="key" data-key="t">T</button>
+                    <button class="key" data-key="y">Y</button>
+                    <button class="key" data-key="u">U</button>
+                    <button class="key" data-key="i">I</button>
+                    <button class="key" data-key="o">O</button>
+                    <button class="key" data-key="p">P</button>
+                </div>
+
+                <!-- 第二行字母 -->
+                <div class="keyboard-row">
+                    <button class="key" data-key="a">A</button>
+                    <button class="key" data-key="s">S</button>
+                    <button class="key" data-key="d">D</button>
+                    <button class="key" data-key="f">F</button>
+                    <button class="key" data-key="g">G</button>
+                    <button class="key" data-key="h">H</button>
+                    <button class="key" data-key="j">J</button>
+                    <button class="key" data-key="k">K</button>
+                    <button class="key" data-key="l">L</button>
+                    <button class="key special" data-key="enter">Enter</button>
+                </div>
+
+                <!-- 第三行字母 -->
+                <div class="keyboard-row">
+                    <button class="key modifier" data-key="shift">Shift</button>
+                    <button class="key" data-key="z">Z</button>
+                    <button class="key" data-key="x">X</button>
+                    <button class="key" data-key="c">C</button>
+                    <button class="key" data-key="v">V</button>
+                    <button class="key" data-key="b">B</button>
+                    <button class="key" data-key="n">N</button>
+                    <button class="key" data-key="m">M</button>
+                    <button class="key special" data-key="esc">Esc</button>
+                </div>
+
+                <!-- 空格和功能键 -->
+                <div class="keyboard-row">
+                    <button class="key modifier" data-key="ctrl">Ctrl</button>
+                    <button class="key modifier" data-key="alt">Alt</button>
+                    <button class="key space" data-key="space">Space</button>
+                    <button class="key" data-key="tab">Tab</button>
+                </div>
+
+                <!-- 方向键 -->
+                <div class="keyboard-row arrow-row">
+                    <div class="arrow-group">
+                        <button class="key arrow" data-key="up">↑</button>
+                        <div class="arrow-bottom">
+                            <button class="key arrow" data-key="left">←</button>
+                            <button class="key arrow" data-key="down">↓</button>
+                            <button class="key arrow" data-key="right">→</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 状态显示 -->
+            <section class="status-section">
+                <div id="status" class="status-display">就绪</div>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 

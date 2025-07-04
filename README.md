@@ -1,52 +1,85 @@
-# pi-keyboard
+# Pi Keyboard - 远程键盘控制
 
-## 项目简介
-pi-keyboard 是一个基于 Go 语言开发的跨平台键盘模拟 Web 服务，支持多种平台和技术方案：
-- **Linux (树莓派等)**：通过 USB OTG 方式模拟标准 USB 键盘
-- **Mac OS**：通过系统自动化工具（AppleScript）模拟键盘输入
-- **Windows**：计划支持（暂未实现）
+Pi Keyboard 是一个远程键盘控制工具，支持通过Web界面进行远程输入操作。
 
-## 需求与应用场景
-- **远程控制**：通过 Web API 远程控制目标设备的键盘输入
-- **自动化测试**：模拟用户键盘操作进行自动化测试
-- **辅助输入**：为特殊需求提供键盘输入解决方案
-- **跨平台支持**：同一套 API 在不同平台上工作
+## 功能特性
 
-## 技术方案
+- 🎯 **多平台支持**: 支持 Linux OTG、macOS 自动化
+- 🌐 **Web界面**: 提供响应式的虚拟键盘界面
+- 📱 **移动端适配**: 优化的移动端触摸体验
+- ⚡ **实时响应**: 低延迟的按键响应
+- 🔒 **安全控制**: 防止并发操作的安全机制
 
-### Linux (树莓派) - USB OTG 模式
-- 利用 Linux 的 HID Gadget（g_hid）功能，将设备模拟成 USB 键盘
-- 生成 `/dev/hidg0` 设备文件，写入标准 HID 报文
-- 目标设备通过 USB 连接，识别为真实键盘硬件
-- 支持 Windows 和 Mac 作为目标主机
+## 快速开始
 
-### Mac OS - 系统自动化模式
-- 使用 AppleScript 的 System Events 进行键盘模拟
-- 直接在本机模拟键盘输入，无需额外硬件
-- 支持字符输入和特殊按键
-- 需要系统辅助功能权限
+### 构建和运行
 
-## 接口设计
+```bash
+# 构建项目
+go build -o pi-keyboard .
 
-### 1. 单键按压接口
-```http
-GET /press?key=<key>&duration=<ms>
+# 运行服务
+./pi-keyboard
 ```
-- `key`: 按键名称（如 `a`, `1`, `space`, `enter` 等）
-- `duration`: 按键持续时间（毫秒，默认 50ms）
 
-### 2. 批量操作接口
+### 环境变量配置
+
+- `PIKBD_PORT`: 服务端口 (默认: 8080)
+- `PIKBD_DRIVER`: 强制指定驱动类型 (linux_otg, macos_automation)
+- `PIKBD_OUTPUT`: Linux OTG 输出文件路径 (默认: /dev/hidg0)
+
+### 使用示例
+
+```bash
+# 使用默认端口启动
+./pi-keyboard
+
+# 使用自定义端口
+PIKBD_PORT=8081 ./pi-keyboard
+
+# 强制使用特定驱动
+PIKBD_DRIVER=macos_automation ./pi-keyboard
+```
+
+## Web界面使用
+
+启动服务后，打开浏览器访问 `http://localhost:8080` 即可使用Web界面。
+
+### 主要功能
+
+1. **文本输入**: 在文本框中输入内容，点击"发送文本"按钮
+2. **虚拟键盘**: 点击屏幕键盘上的按键进行输入
+3. **状态显示**: 实时显示操作状态和结果
+
+### 移动端使用
+
+- 界面已针对移动设备优化
+- 支持触摸操作
+- 防止意外缩放和选择
+- 响应式布局适配不同屏幕尺寸
+
+## API接口
+
+### 单键按压
+
+```http
+GET /press?key=a&duration=100
+```
+
+### 批量操作
+
 ```http
 POST /actions
 Content-Type: application/json
 
 [
-  {"key": "a", "duration": 100},
-  {"key": "b", "duration": 50}
+  {"key": "ctrl", "duration": 50},
+  {"key": "c", "duration": 50}
 ]
 ```
 
-### 3. 文本输入接口
+### 文本输入
+
 ```http
 POST /type
 Content-Type: application/json
@@ -54,133 +87,72 @@ Content-Type: application/json
 {"text": "Hello World"}
 ```
 
-### 支持的按键
-- **字母**: `a-z`
-- **数字**: `0-9`
-- **特殊键**: `space`, `enter`, `esc`, `tab`, `backspace`, `shift`
-- **Mac OS 扩展**: `cmd`, `ctrl`, `alt`, 方向键等
+## 支持的按键
 
-## 部署与使用
+- **字母**: a-z
+- **数字**: 0-9
+- **功能键**: enter, esc, backspace, tab, space
+- **修饰键**: shift, ctrl, alt, cmd
+- **方向键**: up, down, left, right
 
-### 环境变量配置
-- `PIKBD_PORT`: 服务端口（默认 8080）
-- `PIKBD_DRIVER`: 强制指定驱动类型（`linux_otg`, `macos_automation`）
-- `PIKBD_OUTPUT`: Linux OTG 输出文件路径（默认 `/dev/hidg0`）
+## 平台支持
 
-### Linux (树莓派) 部署
-1. 安装并配置 HID Gadget，确保 `/dev/hidg0` 存在且有写权限
-2. 编译并运行程序：
-   ```bash
-   go build
-   sudo ./pi-keyboard
-   ```
-3. 用 OTG 线将树莓派连接到目标电脑
-4. 通过 HTTP 请求调用接口
+### Linux (树莓派)
 
-### Mac OS 部署
-1. 编译并运行程序：
-   ```bash
-   go build
-   ./pi-keyboard
-   ```
-2. 首次运行时，系统会提示授予"辅助功能"权限
-3. 在"系统偏好设置" > "安全性与隐私" > "隐私" > "辅助功能"中添加终端或应用
-4. 重新启动程序
+需要配置 USB OTG 功能：
 
-### 使用示例
 ```bash
-# 单键按压
-curl "http://localhost:8080/press?key=a&duration=100"
+# 启用 HID Gadget
+echo 'dtoverlay=dwc2' >> /boot/config.txt
+echo 'modules-load=dwc2,libcomposite' >> /boot/cmdline.txt
 
-# 批量操作
-curl -X POST http://localhost:8080/actions \
-  -H "Content-Type: application/json" \
-  -d '[{"key":"h","duration":50},{"key":"i","duration":50}]'
-
-# 文本输入
-curl -X POST http://localhost:8080/type \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Hello World"}'
+# 重启后创建 HID 设备
+sudo modprobe libcomposite
+sudo mkdir -p /sys/kernel/config/usb_gadget/keyboard
+# ... 更多配置步骤
 ```
 
-## 平台差异与限制
+### macOS
 
-### Linux OTG 模式
-- ✅ 支持原子的按键操作（Press）
-- ✅ 目标设备识别为硬件键盘
-- ✅ 无需目标设备安装软件
-- ✅ 安全的按键控制，避免卡键风险
-- ❌ 需要支持 OTG 的硬件
-- ❌ 需要 root 权限
+使用 AppleScript 自动化，需要：
 
-### Mac OS 自动化模式
-- ✅ 无需额外硬件
-- ✅ 支持丰富的按键类型
-- ✅ 支持快速文本输入
-- ✅ 原子按键操作，确保安全
-- ❌ 需要辅助功能权限
-- ❌ 只能控制本机
+1. 在"系统偏好设置" > "安全性与隐私" > "隐私"中
+2. 为终端应用添加"辅助功能"权限
 
-## 架构设计
+### Windows
 
-### 分层架构
+暂未实现，计划中。
+
+## 开发
+
+### 项目结构
+
 ```
-HTTP API 层      ← 对外接口 (/press, /actions, /type)
-业务逻辑层       ← 请求处理、并发控制 (Keyboard)
-驱动抽象层       ← 统一接口定义 (KeyboardDriver)
-平台实现层       ← 具体实现 (LinuxOTG/MacOS)
-系统层          ← 操作系统接口 (HID Gadget/AppleScript)
-```
-
-### 核心接口
-```go
-type KeyboardDriver interface {
-    Press(key string, duration time.Duration) error  // 唯一按键方法
-    Type(text string) error                          // 文本输入
-    IsKeySupported(key string) bool                  // 按键支持检查
-    Close() error                                    // 资源清理
-    GetDriverType() string                           // 驱动类型
-}
+pi-keyboard/
+├── main.go              # 主程序入口
+├── act/                 # 核心功能包
+│   ├── driver.go        # 驱动接口定义
+│   ├── factory.go       # 驱动工厂
+│   ├── keyboard.go      # 键盘服务
+│   ├── linux_otg_driver.go    # Linux OTG驱动
+│   └── macos_driver.go  # macOS驱动
+├── web/                 # Web界面文件
+│   ├── index.html       # 主页面
+│   ├── style.css        # 样式文件
+│   └── script.js        # JavaScript逻辑
+└── test/                # 测试文件
 ```
 
-## 安全设计
+### 添加新驱动
 
-### 原子按键操作
-- **移除了不安全的 KeyDown/KeyUp 接口**：避免按键卡死风险
-- **统一使用 Press 原子操作**：确保每次按键都有对应的释放
-- **异常处理机制**：按键操作失败时自动清理状态
-- **资源清理**：程序退出时确保释放所有按键
-
-### 风险控制原理
-```go
-// ❌ 危险的分离操作
-KeyDown("a")  // 如果这里程序崩溃...
-KeyUp("a")    // 这里永远不会执行
-
-// ✅ 安全的原子操作  
-Press("a", 100*time.Millisecond)  // 自动完成按下-释放周期
-```
-
-### 并发安全
-- **全局锁**：防止多个请求同时操作键盘
-- **状态锁**：保护内部按键状态的原子性
-- **非阻塞检测**：避免请求堆积
-
-## 扩展开发
-
-### 新平台支持
 1. 实现 `KeyboardDriver` 接口
-2. 在 `DriverFactory` 中注册平台检测逻辑
-3. 添加平台特定的按键映射
+2. 在 `factory.go` 中注册新驱动
+3. 添加相应的配置选项
 
-### 新功能扩展
-- **组合键支持**: 扩展 Press 方法支持修饰键组合
-- **宏操作**: 支持复杂的按键序列和延迟
-- **配置管理**: 支持按键映射和驱动参数自定义
+## 许可证
 
-## 注意事项
-- **Linux**: 需要 root 权限或相应的 udev 规则以写入 `/dev/hidg0`
-- **Mac OS**: 需要在系统设置中授予"辅助功能"权限
-- **安全**: 本工具可以模拟键盘输入，请谨慎使用，避免被恶意利用
-- **兼容性**: 不同平台支持的按键可能有差异
-- **原子性**: 所有按键操作都是原子的，确保不会出现卡键情况
+MIT License
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
