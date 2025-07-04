@@ -276,3 +276,95 @@ func (d *MacOSDriver) getKeyCode(key string) string {
 	// 对于未知按键，返回空格的 key code
 	return "49"
 }
+
+// MoveTouchpad 移动触控板（相对移动）- 优化版本
+func (d *MacOSDriver) MoveTouchpad(deltaX, deltaY int) error {
+	// 使用 cliclick 进行相对移动
+	// 正确处理正负数格式：正数用+，负数直接用-
+	var xStr, yStr string
+	if deltaX >= 0 {
+		xStr = fmt.Sprintf("+%d", deltaX)
+	} else {
+		xStr = fmt.Sprintf("%d", deltaX) // 负数不需要额外的+号
+	}
+	if deltaY >= 0 {
+		yStr = fmt.Sprintf("+%d", deltaY)
+	} else {
+		yStr = fmt.Sprintf("%d", deltaY) // 负数不需要额外的+号
+	}
+
+	cmd := exec.Command("cliclick", fmt.Sprintf("m:%s,%s", xStr, yStr))
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Printf("[MACOS] cliclick 移动失败 - 增量: (%d,%d), 错误: %v, 输出: %s", deltaX, deltaY, err, string(output))
+		return fmt.Errorf("触控板移动失败: %v", err)
+	}
+
+	return nil
+}
+
+// ClickTouchpad 点击触控板 - 优化版本
+func (d *MacOSDriver) ClickTouchpad(button string, clickType string) error {
+	var cliclickCmd string
+
+	// 根据按钮类型和点击类型构建命令
+	switch button {
+	case "left":
+		switch clickType {
+		case "single":
+			cliclickCmd = "c:."
+		case "double":
+			cliclickCmd = "dc:."
+		default:
+			return fmt.Errorf("不支持的点击类型: %s", clickType)
+		}
+	case "right":
+		cliclickCmd = "rc:."
+	default:
+		return fmt.Errorf("不支持的触控板按钮: %s", button)
+	}
+
+	// 执行点击命令 - 使用 Run() 确保点击执行完成
+	cmd := exec.Command("cliclick", cliclickCmd)
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("[MACOS] 触控板点击失败 - 按钮: %s, 类型: %s, 错误: %v", button, clickType, err)
+		return fmt.Errorf("触控板点击失败: %v", err)
+	}
+
+	log.Printf("[MACOS] 触控板点击成功 - 按钮: %s, 类型: %s", button, clickType)
+	return nil
+}
+
+// ScrollTouchpad 滚动触控板 - 优化版本
+func (d *MacOSDriver) ScrollTouchpad(deltaX, deltaY int) error {
+	// 使用 cliclick 滚动 - 使用 Run() 确保滚动执行完成
+	cmd := exec.Command("cliclick", fmt.Sprintf("w:%d,%d", deltaX, deltaY))
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("[MACOS] 触控板滚动失败 - 增量: (%d,%d), 错误: %v", deltaX, deltaY, err)
+		return fmt.Errorf("触控板滚动失败: %v", err)
+	}
+
+	log.Printf("[MACOS] 触控板滚动成功 - 增量: (%d,%d)", deltaX, deltaY)
+	return nil
+}
+
+// GetTouchpadPosition 获取当前光标位置
+func (d *MacOSDriver) GetTouchpadPosition() (int, int, error) {
+	cmd := exec.Command("cliclick", "p:")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, 0, fmt.Errorf("获取光标位置失败: %v", err)
+	}
+
+	// 解析输出 "x,y"（注意是逗号分隔）
+	var x, y int
+	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d,%d", &x, &y)
+	if err != nil {
+		return 0, 0, fmt.Errorf("解析光标位置失败: %v", err)
+	}
+
+	return x, y, nil
+}

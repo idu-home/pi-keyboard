@@ -69,31 +69,30 @@ main {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-    margin-bottom: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 .stat-item {
-    background: #f8f9fa;
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
     padding: 12px;
-    text-align: center;
-    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .stat-label {
-    display: block;
-    font-size: 0.9rem;
-    color: #666;
-    margin-bottom: 5px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .stat-value {
-    display: block;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #333;
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
 }
 
 .stat-value.success {
@@ -258,6 +257,209 @@ main {
     max-width: 100%;
     height: auto;
     border-radius: 8px;
+}
+
+/* 触控板区域 */
+.touchpad-section {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.touchpad-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1.2rem;
+}
+
+.touchpad-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.touchpad-area {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    height: 300px;
+    position: relative;
+    cursor: move;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.touchpad-area:hover {
+    border-color: #667eea;
+    background: #f0f2ff;
+}
+
+.touchpad-area:active {
+    border-color: #4c63d2;
+    background: #e8ebff;
+}
+
+.touchpad-instructions {
+    text-align: center;
+    color: #666;
+    font-size: 0.9rem;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.touchpad-instructions p {
+    margin: 5px 0;
+}
+
+.touchpad-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.touchpad-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+    max-width: 100px;
+}
+
+.touchpad-btn:hover {
+    background: #5a67d8;
+    transform: translateY(-1px);
+}
+
+.touchpad-btn:active {
+    background: #4c63d2;
+    transform: translateY(0);
+}
+
+/* DPI 调节控件样式 */
+.dpi-controls {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+}
+
+.dpi-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.dpi-control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.dpi-value-label {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+    min-width: 30px;
+    text-align: center;
+}
+
+.dpi-slider {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: #e9ecef;
+    outline: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.dpi-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: all 0.15s;
+}
+
+.dpi-slider::-webkit-slider-thumb:hover {
+    background: #5a6fd8;
+    transform: scale(1.1);
+}
+
+.dpi-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.dpi-display {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+.dpi-display #dpiValue {
+    color: #667eea;
+    font-size: 16px;
+}
+
+.dpi-presets {
+    display: flex;
+    gap: 5px;
+    justify-content: space-between;
+}
+
+.dpi-preset-btn {
+    flex: 1;
+    padding: 6px 8px;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.dpi-preset-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.dpi-preset-btn:active {
+    background: #dee2e6;
+    transform: scale(0.95);
+}
+
+.dpi-preset-btn.active {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
 }
 
 /* 文本输入区域 */
@@ -442,6 +644,91 @@ main {
     color: #ffc107;
 }
 
+/* 控制按钮样式 */
+.controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.controls .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.controls .btn-secondary {
+    background: linear-gradient(135deg, #6c757d, #495057);
+    color: white;
+}
+
+.controls .btn-secondary:hover {
+    background: linear-gradient(135deg, #495057, #343a40);
+    transform: translateY(-1px);
+}
+
+.controls .btn-secondary:active {
+    transform: translateY(0);
+}
+
+/* 连接状态样式 */
+.connection-status {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.connection-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+    background: #28a745;
+    animation: none;
+}
+
+.status-dot.connecting {
+    background: #ffc107;
+}
+
+.status-dot.disconnected {
+    background: #dc3545;
+    animation: none;
+}
+
+.status-dot.http-mode {
+    background: #17a2b8;
+    animation: none;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.connection-info small {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .container {
@@ -452,9 +739,21 @@ main {
         font-size: 2rem;
     }
     
+    .controls {
+        justify-content: center;
+    }
+    
+    .controls .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+    
     .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
+        grid-template-columns: 1fr;
+    }
+    
+    .connection-status {
+        text-align: center;
     }
     
     .keyboard-section {
@@ -478,6 +777,20 @@ main {
     
     .send-btn {
         width: 100%;
+    }
+
+    .touchpad-area {
+        height: 250px;
+    }
+
+    .touchpad-controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .touchpad-btn {
+        max-width: none;
+        padding: 10px 16px;
     }
 }
 
@@ -555,4 +868,18 @@ main {
 
 .key.animate {
     animation: keyPress 0.15s ease-in-out;
+}
+
+/* WebSocket 统计项特殊样式 */
+.stat-item[id^="ws"] {
+    border-color: rgba(40, 167, 69, 0.3);
+    background: rgba(40, 167, 69, 0.1);
+}
+
+.stat-item[id^="ws"] .stat-label {
+    color: rgba(40, 167, 69, 0.9);
+}
+
+.stat-item[id^="ws"] .stat-value {
+    color: #28a745;
 }

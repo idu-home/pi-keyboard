@@ -52,12 +52,32 @@ type Action struct {
 	Duration int    `json:"duration,omitempty"`
 }
 
+// TouchpadMoveRequest 触控板移动请求
+type TouchpadMoveRequest struct {
+	DeltaX int     `json:"deltaX"`
+	DeltaY int     `json:"deltaY"`
+	DPI    float64 `json:"dpi,omitempty"` // DPI 倍数，默认为 1.0
+}
+
+// TouchpadClickRequest 触控板点击请求
+type TouchpadClickRequest struct {
+	Button string `json:"button"` // left, right
+	Type   string `json:"type"`   // single, double
+}
+
+// TouchpadScrollRequest 触控板滚动请求
+type TouchpadScrollRequest struct {
+	DeltaX int `json:"deltaX"`
+	DeltaY int `json:"deltaY"`
+}
+
 type Keyboard struct {
-	driver KeyboardDriver
-	stats  *KeyboardStats
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	driver         KeyboardDriver
+	touchpadDriver TouchpadDriver
+	stats          *KeyboardStats
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
 	// 移除 requestChan，改为直接并发处理
 }
 
@@ -95,6 +115,12 @@ func NewKeyboard(driver KeyboardDriver) *Keyboard {
 		stats:  &KeyboardStats{},
 		ctx:    ctx,
 		cancel: cancel,
+	}
+
+	// 如果驱动同时支持触控板功能，则设置触控板驱动
+	if touchpadDriver, ok := driver.(TouchpadDriver); ok {
+		k.touchpadDriver = touchpadDriver
+		log.Printf("[KEYBOARD] 检测到触控板驱动支持")
 	}
 
 	log.Printf("[KEYBOARD] 并发键盘处理器启动 - 直接并发处理，无队列")
@@ -441,6 +467,224 @@ func (k *Keyboard) StatsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "统计信息编码失败", 500)
 		return
 	}
+}
+
+// StatsHandlerWithWebSocket 统计信息处理器（包含WebSocket统计）
+func (k *Keyboard) StatsHandlerWithWebSocket(w http.ResponseWriter, r *http.Request, wsManager *WebSocketManager) {
+	stats := k.GetStats()
+
+	// 计算成功率
+	var successRate float64
+	if stats.TotalRequests > 0 {
+		successRate = float64(stats.SuccessRequests) / float64(stats.TotalRequests) * 100
+	}
+
+	// 格式化最后请求时间
+	var lastRequestTime string
+	if !stats.LastRequestTime.IsZero() {
+		lastRequestTime = stats.LastRequestTime.Format(time.RFC3339)
+	}
+
+	// 构建响应数据
+	responseData := map[string]interface{}{
+		"total_requests":       stats.TotalRequests,
+		"success_requests":     stats.SuccessRequests,
+		"failed_requests":      stats.FailedRequests,
+		"rejected_requests":    stats.RejectedRequests,
+		"average_latency_ms":   stats.AverageLatency.Milliseconds(),
+		"last_request_time":    lastRequestTime,
+		"currently_processing": stats.CurrentlyProcessing,
+		"success_rate":         successRate,
+
+		// 分阶段延迟统计
+		"latency_breakdown": map[string]interface{}{
+			"process_ms": stats.ProcessLatency.Milliseconds(),
+			"network_ms": stats.NetworkLatency.Milliseconds(),
+		},
+		"latency_history": stats.LatencyHistory,
+	}
+
+	// 添加WebSocket统计信息
+	if wsManager != nil {
+		wsStats := wsManager.GetStats()
+		responseData["websocket"] = map[string]interface{}{
+			"active_connections": wsStats.ActiveConnections,
+			"total_connections":  wsStats.TotalConnections,
+			"messages_received":  wsStats.MessagesReceived,
+			"messages_sent":      wsStats.MessagesSent,
+			"last_connect_time":  wsStats.LastConnectTime.Format(time.RFC3339),
+		}
+	} else {
+		responseData["websocket"] = map[string]interface{}{
+			"enabled": false,
+			"message": "WebSocket support is disabled",
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(responseData)
+
+	if err != nil {
+		log.Printf("[STATS] JSON编码失败: %v", err)
+		http.Error(w, "统计信息编码失败", 500)
+		return
+	}
+}
+
+// TouchpadMoveHandler 触控板移动处理器
+func (k *Keyboard) TouchpadMoveHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	clientIP := r.RemoteAddr
+
+	if k.touchpadDriver == nil {
+		http.Error(w, "触控板驱动不可用", 501)
+		return
+	}
+
+	var req TouchpadMoveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "JSON 解析失败", 400)
+		return
+	}
+
+	// 异步处理鼠标移动
+	k.wg.Add(1)
+	go func() {
+		defer k.wg.Done()
+		atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
+		defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
+
+		// 执行触控板移动操作
+		driverStartTime := time.Now()
+
+		// 应用 DPI 倍数
+		dpi := req.DPI
+		if dpi <= 0 {
+			dpi = 1.0 // 默认 DPI
+		}
+
+		adjustedDeltaX := int(float64(req.DeltaX) * dpi)
+		adjustedDeltaY := int(float64(req.DeltaY) * dpi)
+
+		err := k.touchpadDriver.MoveTouchpad(adjustedDeltaX, adjustedDeltaY)
+		processLatency := time.Since(driverStartTime)
+
+		// 计算总延迟
+		totalLatency := time.Since(startTime)
+		networkLatency := totalLatency - processLatency
+
+		// 更新统计信息
+		k.updateStatsWithDetails(err == nil, totalLatency, processLatency, networkLatency, false)
+
+		if err != nil {
+			log.Printf("[TOUCHPAD] 触控板移动失败: (%d,%d) (%v) - %s | 总延迟:%v 处理:%v",
+				req.DeltaX, req.DeltaY, err, clientIP, totalLatency, processLatency)
+		}
+	}()
+
+	io.WriteString(w, "processing")
+}
+
+// TouchpadClickHandler 触控板点击处理器
+func (k *Keyboard) TouchpadClickHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	clientIP := r.RemoteAddr
+
+	if k.touchpadDriver == nil {
+		http.Error(w, "触控板驱动不可用", 501)
+		return
+	}
+
+	var req TouchpadClickRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "JSON 解析失败", 400)
+		return
+	}
+
+	// 参数验证
+	if req.Button == "" {
+		req.Button = "left"
+	}
+	if req.Type == "" {
+		req.Type = "single"
+	}
+
+	// 异步处理鼠标点击
+	k.wg.Add(1)
+	go func() {
+		defer k.wg.Done()
+		atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
+		defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
+
+		// 执行触控板点击操作
+		driverStartTime := time.Now()
+		err := k.touchpadDriver.ClickTouchpad(req.Button, req.Type)
+		processLatency := time.Since(driverStartTime)
+
+		// 计算总延迟
+		totalLatency := time.Since(startTime)
+		networkLatency := totalLatency - processLatency
+
+		// 更新统计信息
+		k.updateStatsWithDetails(err == nil, totalLatency, processLatency, networkLatency, false)
+
+		if err != nil {
+			log.Printf("[TOUCHPAD] 触控板点击失败: %s %s (%v) - %s | 总延迟:%v 处理:%v",
+				req.Button, req.Type, err, clientIP, totalLatency, processLatency)
+		}
+	}()
+
+	io.WriteString(w, "processing")
+}
+
+// TouchpadScrollHandler 触控板滚动处理器
+func (k *Keyboard) TouchpadScrollHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	clientIP := r.RemoteAddr
+
+	if k.touchpadDriver == nil {
+		http.Error(w, "触控板驱动不可用", 501)
+		return
+	}
+
+	var req TouchpadScrollRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "JSON 解析失败", 400)
+		return
+	}
+
+	// 异步处理鼠标滚动
+	k.wg.Add(1)
+	go func() {
+		defer k.wg.Done()
+		atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
+		defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
+
+		// 执行触控板滚动操作
+		driverStartTime := time.Now()
+		err := k.touchpadDriver.ScrollTouchpad(req.DeltaX, req.DeltaY)
+		processLatency := time.Since(driverStartTime)
+
+		// 计算总延迟
+		totalLatency := time.Since(startTime)
+		networkLatency := totalLatency - processLatency
+
+		// 更新统计信息
+		k.updateStatsWithDetails(err == nil, totalLatency, processLatency, networkLatency, false)
+
+		if err != nil {
+			log.Printf("[TOUCHPAD] 触控板滚动失败: (%d,%d) (%v) - %s | 总延迟:%v 处理:%v",
+				req.DeltaX, req.DeltaY, err, clientIP, totalLatency, processLatency)
+		}
+	}()
+
+	io.WriteString(w, "processing")
 }
 
 // Close 关闭键盘服务

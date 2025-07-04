@@ -20,6 +20,10 @@ func main() {
 		driverType = flag.String("driver", "", "强制指定驱动类型 (linux_otg, macos_automation)")
 		outputFile = flag.String("output", "", "Linux OTG 输出文件路径")
 
+		// WebSocket 配置
+		enableWebSocket = flag.Bool("websocket", true, "是否启用WebSocket支持")
+		keepHTTPAPI     = flag.Bool("keep-http", true, "是否保留HTTP API (兼容性)")
+
 		// 日志配置
 		enableHTTPLog   = flag.Bool("log", true, "是否启用HTTP日志")
 		logOutput       = flag.String("log-output", "stdout", "日志输出目标 (stdout/file/both)")
@@ -43,9 +47,9 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Println()
 		fmt.Println("示例:")
-		fmt.Printf("  %s -port 8081 -log-output file -log-file ./logs/api.log\n", os.Args[0])
-		fmt.Printf("  %s -driver macos_automation -log-req-body\n", os.Args[0])
-		fmt.Printf("  %s -log false\n", os.Args[0])
+		fmt.Printf("  %s -port 8081 -websocket -keep-http\n", os.Args[0])
+		fmt.Printf("  %s -driver macos_automation -log-output file\n", os.Args[0])
+		fmt.Printf("  %s -websocket=false  # 仅使用HTTP API\n", os.Args[0])
 		return
 	}
 
@@ -82,7 +86,14 @@ func main() {
 	log.Printf("使用键盘驱动: %s", driver.GetDriverType())
 	log.Printf("可用驱动列表: %v", factory.GetAvailableDrivers())
 
-	// 创建日志配置 - 硬编码需要记录日志的API
+	// 创建 WebSocket 管理器
+	var wsManager *act.WebSocketManager
+	if *enableWebSocket {
+		wsManager = act.NewWebSocketManager(keyboard)
+		log.Printf("WebSocket 管理器创建成功")
+	}
+
+	// 创建日志配置
 	logConfig := &logger.LogConfig{
 		EnableHTTPLog:   *enableHTTPLog,
 		Output:          *logOutput,
@@ -98,20 +109,37 @@ func main() {
 	}
 	defer httpLogger.Close()
 
-	// 输出日志配置信息
+	// 输出配置信息
 	log.Printf("HTTP日志配置: 启用=%v, 输出=%s, 文件=%s",
 		logConfig.EnableHTTPLog, logConfig.Output, logConfig.LogFile)
-	log.Printf("记录的API: /press, /press-sync, /actions, /type")
 
-	// API 接口注册 - 有选择性地使用日志中间件
-	// 核心功能API - 记录日志
-	http.Handle("/press", httpLogger.Middleware(http.HandlerFunc(keyboard.PressHandler)))
-	http.Handle("/press-sync", httpLogger.Middleware(http.HandlerFunc(keyboard.PressHandlerSync)))
-	http.Handle("/actions", httpLogger.Middleware(http.HandlerFunc(keyboard.ActionsHandler)))
-	http.Handle("/type", httpLogger.Middleware(http.HandlerFunc(keyboard.TypeHandler)))
+	if *enableWebSocket {
+		log.Printf("WebSocket支持: 启用")
+		http.HandleFunc("/ws", wsManager.HandleWebSocket)
+	}
 
-	// 统计接口 - 不记录日志（避免过多日志）
-	http.HandleFunc("/stats", keyboard.StatsHandler)
+	if *keepHTTPAPI {
+		log.Printf("HTTP API支持: 启用 (兼容性)")
+		log.Printf("记录的API: /press, /press-sync, /actions, /type, /touchpad/*")
+
+		// 保留原有的HTTP API
+		http.Handle("/press", httpLogger.Middleware(http.HandlerFunc(keyboard.PressHandler)))
+		http.Handle("/press-sync", httpLogger.Middleware(http.HandlerFunc(keyboard.PressHandlerSync)))
+		http.Handle("/actions", httpLogger.Middleware(http.HandlerFunc(keyboard.ActionsHandler)))
+		http.Handle("/type", httpLogger.Middleware(http.HandlerFunc(keyboard.TypeHandler)))
+
+		// 触控板功能API
+		http.Handle("/touchpad/move", httpLogger.Middleware(http.HandlerFunc(keyboard.TouchpadMoveHandler)))
+		http.Handle("/touchpad/click", httpLogger.Middleware(http.HandlerFunc(keyboard.TouchpadClickHandler)))
+		http.Handle("/touchpad/scroll", httpLogger.Middleware(http.HandlerFunc(keyboard.TouchpadScrollHandler)))
+	} else {
+		log.Printf("HTTP API支持: 禁用 (仅WebSocket)")
+	}
+
+	// 统计接口 - 扩展支持WebSocket统计
+	http.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		keyboard.StatsHandlerWithWebSocket(w, r, wsManager)
+	})
 
 	log.Printf("API 接口注册完成")
 
@@ -132,11 +160,20 @@ func main() {
 	log.Printf("=== 服务启动信息 ===")
 	log.Printf("监听端口: %s", *port)
 	log.Printf("Web界面: http://localhost:%s", *port)
+	if *enableWebSocket {
+		log.Printf("WebSocket: ws://localhost:%s/ws", *port)
+	}
 	log.Printf("API统计: http://localhost:%s/stats", *port)
 	log.Printf("启动时间: %s", time.Now().Format("2006-01-02 15:04:05"))
 	log.Printf("======================")
 
 	log.Printf("pi-keyboard Web 服务已启动，监听 %s 端口...", *port)
 	log.Printf("访问 http://localhost:%s 使用键盘界面", *port)
+
+	// 确保在程序退出时清理WebSocket连接
+	if wsManager != nil {
+		defer wsManager.Close()
+	}
+
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
 }

@@ -17,22 +17,60 @@
             <!-- 统计信息区域 -->
             <section class="stats-section">
                 <h3>系统状态</h3>
+                <div class="controls">
+                    <button id="refreshStats" class="btn btn-secondary">刷新统计</button>
+                    <button id="toggleDebug" class="btn btn-secondary">调试日志</button>
+                    <button id="toggleConnectionMode" class="btn btn-secondary">切换连接模式</button>
+                </div>
+                
+                <!-- WebSocket 连接状态 -->
+                <div class="connection-status">
+                    <div class="connection-indicator">
+                        <span id="connectionDot" class="status-dot"></span>
+                        <span id="connectionStatus">正在连接...</span>
+                    </div>
+                    <div class="connection-info">
+                        <small id="connectionMode">WebSocket 模式</small>
+                    </div>
+                </div>
+                
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <span class="stat-label">总请求数</span>
-                        <span class="stat-value" id="totalRequests">-</span>
+                        <span class="stat-label">总请求:</span>
+                        <span id="totalRequests" class="stat-value">0</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">成功率</span>
-                        <span class="stat-value" id="successRate">-</span>
+                        <span class="stat-label">成功率:</span>
+                        <span id="successRate" class="stat-value">0%</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">平均延迟</span>
-                        <span class="stat-value" id="avgLatency">-</span>
+                        <span class="stat-label">平均延迟:</span>
+                        <span id="avgLatency" class="stat-value">0ms</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">并发处理</span>
-                        <span class="stat-value" id="processingStatus">-</span>
+                        <span class="stat-label">处理中:</span>
+                        <span id="processingStatus" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">处理延迟:</span>
+                        <span id="processLatency" class="stat-value">0ms</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">网络延迟:</span>
+                        <span id="networkLatency" class="stat-value">0ms</span>
+                    </div>
+                    <!-- WebSocket 统计 -->
+                    <div class="stat-item" id="wsActiveConnections" style="display: none;">
+                        <span class="stat-label">活跃连接:</span>
+                        <span class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item" id="wsMessagesReceived" style="display: none;">
+                        <span class="stat-label">接收消息:</span>
+                        <span class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item" id="wsMessagesSent" style="display: none;">
+                        <span class="stat-label">发送消息:</span>
+                        <span class="stat-value">0</span>
                     </div>
                 </div>
                 
@@ -73,11 +111,6 @@
                         </div>
                     </div>
                 </div>
-                
-                <div class="control-buttons">
-                    <button id="refreshStats" class="refresh-btn">刷新统计</button>
-                    <button id="toggleDebug" class="debug-btn">调试日志</button>
-                </div>
             </section>
 
             <!-- 文本输入区域 -->
@@ -86,6 +119,46 @@
                 <div class="input-group">
                     <textarea id="textInput" placeholder="输入要发送的文本...&#10;支持 Ctrl+Enter 或 Cmd+Enter 快速发送"></textarea>
                     <button id="sendText" class="send-btn">发送文本</button>
+                </div>
+            </section>
+
+            <!-- 触控板区域 -->
+            <section class="touchpad-section">
+                <h3>触控板</h3>
+                <div class="touchpad-container">
+                    <div id="touchpad" class="touchpad-area">
+                        <div class="touchpad-instructions">
+                            <p>滑动：移动光标</p>
+                            <p>单击：左键点击</p>
+                            <p>长按：右键点击</p>
+                            <p>双指滚动：滚轮</p>
+                        </div>
+                    </div>
+                    <div class="touchpad-controls">
+                        <button id="leftClick" class="touchpad-btn">左键</button>
+                        <button id="rightClick" class="touchpad-btn">右键</button>
+                        <button id="doubleClick" class="touchpad-btn">双击</button>
+                    </div>
+                    
+                    <!-- DPI 调节区域 -->
+                    <div class="dpi-controls">
+                        <label for="dpiSlider" class="dpi-label">灵敏度 (DPI)</label>
+                        <div class="dpi-control-group">
+                            <span class="dpi-value-label">0.5x</span>
+                            <input type="range" id="dpiSlider" class="dpi-slider" 
+                                   min="0.5" max="5.0" step="0.1" value="2.0">
+                            <span class="dpi-value-label">5.0x</span>
+                        </div>
+                        <div class="dpi-display">
+                            当前: <span id="dpiValue">2.0</span>x
+                        </div>
+                        <div class="dpi-presets">
+                            <button class="dpi-preset-btn" data-dpi="0.5">慢速</button>
+                            <button class="dpi-preset-btn" data-dpi="1.0">普通</button>
+                            <button class="dpi-preset-btn" data-dpi="2.0">快速</button>
+                            <button class="dpi-preset-btn" data-dpi="3.5">极速</button>
+                        </div>
+                    </div>
                 </div>
             </section>
 
