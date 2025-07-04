@@ -26,13 +26,12 @@ var keyMap = map[string]byte{
 	"shift": 0xe1, // 左 shift，右 shift 可扩展
 }
 
-// KeyRequest 按键请求
+// KeyRequest 按键请求（简化版，去掉Response通道）
 type KeyRequest struct {
 	Key         string
 	Duration    time.Duration
 	ClientIP    string
-	Response    chan KeyResponse
-	RequestTime time.Time // 请求创建时间
+	RequestTime time.Time
 }
 
 // KeyResponse 按键响应
@@ -54,12 +53,12 @@ type Action struct {
 }
 
 type Keyboard struct {
-	driver      KeyboardDriver
-	stats       *KeyboardStats
-	requestChan chan KeyRequest
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	driver KeyboardDriver
+	stats  *KeyboardStats
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	// 移除 requestChan，改为直接并发处理
 }
 
 // KeyboardStats 统计信息
@@ -76,7 +75,6 @@ type KeyboardStats struct {
 	latencyCount        int64
 
 	// 分阶段延迟统计
-	QueueLatency   time.Duration   // 队列等待时间
 	ProcessLatency time.Duration   // 实际处理时间
 	NetworkLatency time.Duration   // 网络传输时间
 	LatencyHistory []LatencyRecord // 最近的延迟记录
@@ -86,7 +84,6 @@ type KeyboardStats struct {
 type LatencyRecord struct {
 	Timestamp      time.Time     `json:"timestamp"`
 	TotalLatency   time.Duration `json:"total_latency"`
-	QueueLatency   time.Duration `json:"queue_latency"`
 	ProcessLatency time.Duration `json:"process_latency"`
 	NetworkLatency time.Duration `json:"network_latency"`
 }
@@ -94,45 +91,20 @@ type LatencyRecord struct {
 func NewKeyboard(driver KeyboardDriver) *Keyboard {
 	ctx, cancel := context.WithCancel(context.Background())
 	k := &Keyboard{
-		driver:      driver,
-		stats:       &KeyboardStats{},
-		requestChan: make(chan KeyRequest, 100), // 缓冲队列
-		ctx:         ctx,
-		cancel:      cancel,
+		driver: driver,
+		stats:  &KeyboardStats{},
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
-	// 启动处理协程
-	k.wg.Add(1)
-	go k.processRequests()
-
-	log.Printf("[KEYBOARD] 异步键盘处理器启动 - 队列大小: 100")
+	log.Printf("[KEYBOARD] 并发键盘处理器启动 - 直接并发处理，无队列")
 	return k
 }
 
-// processRequests 异步处理按键请求
-func (k *Keyboard) processRequests() {
-	defer k.wg.Done()
-	log.Printf("[KEYBOARD] 按键处理协程启动")
-
-	for {
-		select {
-		case req := <-k.requestChan:
-			k.handleSingleRequest(req)
-		case <-k.ctx.Done():
-			log.Printf("[KEYBOARD] 按键处理协程停止")
-			return
-		}
-	}
-}
-
-// handleSingleRequest 处理单个按键请求
+// handleSingleRequest 处理单个按键请求（现在直接并发执行）
 func (k *Keyboard) handleSingleRequest(req KeyRequest) {
-	processStartTime := time.Now()
 	atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
 	defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
-
-	// 计算队列等待时间
-	queueLatency := processStartTime.Sub(req.RequestTime)
 
 	// 执行按键操作
 	driverStartTime := time.Now()
@@ -141,30 +113,17 @@ func (k *Keyboard) handleSingleRequest(req KeyRequest) {
 
 	// 计算总延迟
 	totalLatency := time.Since(req.RequestTime)
-	networkLatency := totalLatency - queueLatency - processLatency
+	networkLatency := totalLatency - processLatency
 
 	// 更新统计信息
-	k.updateStatsWithDetails(err == nil, totalLatency, queueLatency, processLatency, networkLatency, false)
-
-	// 发送响应
-	response := KeyResponse{
-		Success: err == nil,
-		Error:   err,
-		Latency: totalLatency,
-	}
-
-	select {
-	case req.Response <- response:
-	case <-time.After(1 * time.Second):
-		log.Printf("[KEYBOARD] 响应超时: %s - %s", req.Key, req.ClientIP)
-	}
+	k.updateStatsWithDetails(err == nil, totalLatency, processLatency, networkLatency, false)
 
 	if err != nil {
-		log.Printf("[KEYBOARD] 按键失败: %s (%v) - %s | 总延迟:%v 队列:%v 处理:%v",
-			req.Key, err, req.ClientIP, totalLatency, queueLatency, processLatency)
+		log.Printf("[KEYBOARD] 按键失败: %s (%v) - %s | 总延迟:%v 处理:%v",
+			req.Key, err, req.ClientIP, totalLatency, processLatency)
 	} else {
-		log.Printf("[KEYBOARD] 按键成功: %s - %s | 总延迟:%v 队列:%v 处理:%v",
-			req.Key, req.ClientIP, totalLatency, queueLatency, processLatency)
+		log.Printf("[KEYBOARD] 按键成功: %s - %s | 总延迟:%v 处理:%v",
+			req.Key, req.ClientIP, totalLatency, processLatency)
 	}
 }
 
@@ -190,7 +149,6 @@ func (k *Keyboard) GetStats() *KeyboardStats {
 		latencyCount:        k.stats.latencyCount,
 
 		// 分阶段延迟统计
-		QueueLatency:   k.stats.QueueLatency,
 		ProcessLatency: k.stats.ProcessLatency,
 		NetworkLatency: k.stats.NetworkLatency,
 		LatencyHistory: latencyHistory,
@@ -199,11 +157,11 @@ func (k *Keyboard) GetStats() *KeyboardStats {
 
 // updateStats 更新统计信息
 func (k *Keyboard) updateStats(success bool, latency time.Duration, rejected bool) {
-	k.updateStatsWithDetails(success, latency, 0, latency, 0, rejected)
+	k.updateStatsWithDetails(success, latency, latency, 0, rejected)
 }
 
 // updateStatsWithDetails 更新详细统计信息
-func (k *Keyboard) updateStatsWithDetails(success bool, totalLatency, queueLatency, processLatency, networkLatency time.Duration, rejected bool) {
+func (k *Keyboard) updateStatsWithDetails(success bool, totalLatency, processLatency, networkLatency time.Duration, rejected bool) {
 	k.stats.mu.Lock()
 	defer k.stats.mu.Unlock()
 
@@ -228,11 +186,9 @@ func (k *Keyboard) updateStatsWithDetails(success bool, totalLatency, queueLaten
 
 	// 更新分阶段延迟（简单平均）
 	if k.stats.latencyCount == 1 {
-		k.stats.QueueLatency = queueLatency
 		k.stats.ProcessLatency = processLatency
 		k.stats.NetworkLatency = networkLatency
 	} else {
-		k.stats.QueueLatency = (k.stats.QueueLatency + queueLatency) / 2
 		k.stats.ProcessLatency = (k.stats.ProcessLatency + processLatency) / 2
 		k.stats.NetworkLatency = (k.stats.NetworkLatency + networkLatency) / 2
 	}
@@ -241,7 +197,6 @@ func (k *Keyboard) updateStatsWithDetails(success bool, totalLatency, queueLaten
 	record := LatencyRecord{
 		Timestamp:      time.Now(),
 		TotalLatency:   totalLatency,
-		QueueLatency:   queueLatency,
 		ProcessLatency: processLatency,
 		NetworkLatency: networkLatency,
 	}
@@ -252,7 +207,7 @@ func (k *Keyboard) updateStatsWithDetails(success bool, totalLatency, queueLaten
 	}
 }
 
-// PressHandler 按键处理接口（异步）
+// PressHandler 按键处理接口（现在直接并发处理）
 func (k *Keyboard) PressHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	key := strings.ToLower(r.URL.Query().Get("key"))
@@ -283,28 +238,26 @@ func (k *Keyboard) PressHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 检查队列是否满
-	select {
-	case k.requestChan <- KeyRequest{
+	// 创建请求
+	req := KeyRequest{
 		Key:         key,
 		Duration:    duration,
 		ClientIP:    clientIP,
-		Response:    make(chan KeyResponse, 1),
 		RequestTime: time.Now(),
-	}:
-		// 请求已加入队列，立即返回成功
-		io.WriteString(w, "queued")
-
-	default:
-		// 队列已满，拒绝请求
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		log.Printf("[PRESS] 队列满，拒绝请求: %s - %s", key, clientIP)
-		http.Error(w, "服务器繁忙，请稍后重试", http.StatusTooManyRequests)
 	}
+
+	// 直接启动goroutine并发处理，不使用队列
+	k.wg.Add(1)
+	go func() {
+		defer k.wg.Done()
+		k.handleSingleRequest(req)
+	}()
+
+	// 立即返回，不等待处理完成
+	io.WriteString(w, "processing")
 }
 
-// PressHandlerSync 同步按键处理接口（用于需要确认的场景）
+// PressHandlerSync 同步按键处理接口（直接处理，不使用队列）
 func (k *Keyboard) PressHandlerSync(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	key := strings.ToLower(r.URL.Query().Get("key"))
@@ -335,39 +288,26 @@ func (k *Keyboard) PressHandlerSync(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 创建响应通道
-	responseChan := make(chan KeyResponse, 1)
-
-	// 发送请求
-	select {
-	case k.requestChan <- KeyRequest{
+	// 创建请求
+	req := KeyRequest{
 		Key:         key,
 		Duration:    duration,
 		ClientIP:    clientIP,
-		Response:    responseChan,
 		RequestTime: time.Now(),
-	}:
-		// 等待响应
-		select {
-		case response := <-responseChan:
-			if response.Success {
-				io.WriteString(w, "ok")
-			} else {
-				http.Error(w, response.Error.Error(), 500)
-			}
-		case <-time.After(10 * time.Second):
-			http.Error(w, "请求超时", http.StatusGatewayTimeout)
-		}
+	}
 
-	default:
-		// 队列已满
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		http.Error(w, "服务器繁忙，请稍后重试", http.StatusTooManyRequests)
+	// 直接同步处理
+	k.handleSingleRequest(req)
+
+	// 根据最后的统计信息判断是否成功
+	if k.stats.FailedRequests > 0 {
+		http.Error(w, "按键处理失败", 500)
+	} else {
+		io.WriteString(w, "ok")
 	}
 }
 
-// ActionsHandler 批量操作处理（优化版）
+// ActionsHandler 批量操作处理（并发处理版）
 func (k *Keyboard) ActionsHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	clientIP := r.RemoteAddr
@@ -385,15 +325,7 @@ func (k *Keyboard) ActionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 检查队列容量
-	if len(k.requestChan)+len(actions) > cap(k.requestChan) {
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		http.Error(w, "批量操作过多，服务器繁忙", http.StatusTooManyRequests)
-		return
-	}
-
-	// 批量提交请求
+	// 并发处理所有操作
 	for _, act := range actions {
 		key := strings.ToLower(act.Key)
 		if !k.driver.IsKeySupported(key) {
@@ -406,20 +338,26 @@ func (k *Keyboard) ActionsHandler(w http.ResponseWriter, r *http.Request) {
 			duration = time.Duration(act.Duration) * time.Millisecond
 		}
 
-		k.requestChan <- KeyRequest{
+		req := KeyRequest{
 			Key:         key,
 			Duration:    duration,
 			ClientIP:    clientIP,
-			Response:    make(chan KeyResponse, 1),
 			RequestTime: time.Now(),
 		}
+
+		// 每个操作都启动独立的goroutine
+		k.wg.Add(1)
+		go func(r KeyRequest) {
+			defer k.wg.Done()
+			k.handleSingleRequest(r)
+		}(req)
 	}
 
-	io.WriteString(w, "queued")
-	log.Printf("[ACTIONS] 批量操作入队: %d个操作 - %s", len(actions), clientIP)
+	io.WriteString(w, "processing")
+	log.Printf("[ACTIONS] 批量操作并发处理: %d个操作 - %s", len(actions), clientIP)
 }
 
-// TypeHandler 文本输入处理
+// TypeHandler 文本输入处理（并发处理版）
 func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	clientIP := r.RemoteAddr
@@ -439,36 +377,28 @@ func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 将文本转换为按键序列
-	var keyRequests []KeyRequest
+	// 将文本转换为按键序列，并发处理
 	for _, char := range req.Text {
 		key := strings.ToLower(string(char))
 		if k.driver.IsKeySupported(key) {
-			keyRequests = append(keyRequests, KeyRequest{
+			keyReq := KeyRequest{
 				Key:         key,
 				Duration:    50 * time.Millisecond,
 				ClientIP:    clientIP,
-				Response:    make(chan KeyResponse, 1),
 				RequestTime: time.Now(),
-			})
+			}
+
+			// 每个字符都启动独立的goroutine
+			k.wg.Add(1)
+			go func(r KeyRequest) {
+				defer k.wg.Done()
+				k.handleSingleRequest(r)
+			}(keyReq)
 		}
 	}
 
-	// 检查队列容量
-	if len(k.requestChan)+len(keyRequests) > cap(k.requestChan) {
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		http.Error(w, "文本过长，服务器繁忙", http.StatusTooManyRequests)
-		return
-	}
-
-	// 批量提交
-	for _, keyReq := range keyRequests {
-		k.requestChan <- keyReq
-	}
-
-	io.WriteString(w, "queued")
-	log.Printf("[TYPE] 文本输入已入队 - 客户端: %s, 字符数: %d", clientIP, len(keyRequests))
+	io.WriteString(w, "processing")
+	log.Printf("[TYPE] 文本输入并发处理 - 客户端: %s, 字符数: %d", clientIP, len(req.Text))
 }
 
 // StatsHandler 统计信息接口
@@ -497,12 +427,9 @@ func (k *Keyboard) StatsHandler(w http.ResponseWriter, r *http.Request) {
 		"last_request_time":    lastRequestTime,
 		"currently_processing": stats.CurrentlyProcessing,
 		"success_rate":         successRate,
-		"queue_length":         len(k.requestChan),
-		"queue_capacity":       cap(k.requestChan),
 
 		// 分阶段延迟统计
 		"latency_breakdown": map[string]interface{}{
-			"queue_ms":   stats.QueueLatency.Milliseconds(),
 			"process_ms": stats.ProcessLatency.Milliseconds(),
 			"network_ms": stats.NetworkLatency.Milliseconds(),
 		},
@@ -520,7 +447,6 @@ func (k *Keyboard) StatsHandler(w http.ResponseWriter, r *http.Request) {
 func (k *Keyboard) Close() error {
 	log.Printf("[KEYBOARD] 关闭键盘服务")
 	k.cancel()
-	k.wg.Wait()
-	close(k.requestChan)
+	k.wg.Wait() // 等待所有并发任务完成
 	return k.driver.Close()
 }

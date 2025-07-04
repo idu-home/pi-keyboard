@@ -13,8 +13,7 @@ class PiKeyboard {
             successRate: document.getElementById('successRate'),
             avgLatency: document.getElementById('avgLatency'),
             processingStatus: document.getElementById('processingStatus'),
-            // 延迟分析元素
-            queueLatency: document.getElementById('queueLatency'),
+            // 延迟分析元素 (移除队列延迟)
             processLatency: document.getElementById('processLatency'),
             networkLatency: document.getElementById('networkLatency')
         };
@@ -27,6 +26,7 @@ class PiKeyboard {
         this.statsInterval = null;
         this.requestCount = 0;
         this.debugLogVisible = false;
+        this.keyPressStartTimes = {};
         
         // 添加日志系统
         this.enableDebugLog();
@@ -36,13 +36,14 @@ class PiKeyboard {
     
     // 启用调试日志
     enableDebugLog() {
-        this.log('🚀 Pi Keyboard 初始化');
+        this.log('🚀 Pi Keyboard 初始化 - 并发处理模式');
         this.log(`📍 API Base URL: ${this.apiBase}`);
         this.log(`🌐 User Agent: ${navigator.userAgent}`);
         this.log(`📱 Screen Size: ${window.screen.width}x${window.screen.height}`);
         this.log(`🔗 当前页面URL: ${window.location.href}`);
         this.log(`🌍 网络状态: ${navigator.onLine ? '在线' : '离线'}`);
         this.log(`🕐 页面加载时间: ${new Date().toLocaleString()}`);
+        this.log('⚡ 并发处理: 无队列等待，每个请求独立处理');
         
         // 监听网络状态
         window.addEventListener('online', () => {
@@ -149,26 +150,37 @@ class PiKeyboard {
             const keyValue = key.dataset.key;
             this.log(`🔧 绑定按键 [${index}]: ${keyValue || '未定义'}`);
             
-            key.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.log(`👆 按键点击事件: ${keyValue}`);
-                this.handleKeyPress(key);
-            });
-            
-            // 添加触摸事件支持
-            key.addEventListener('touchstart', (e) => {
+            const handlePressStart = (e) => {
                 e.preventDefault();
                 key.classList.add('pressed');
-                this.log(`👆 按键触摸开始: ${keyValue}`);
-            });
-            
-            key.addEventListener('touchend', (e) => {
+                this.keyPressStartTimes[keyValue] = performance.now();
+                this.log(`👇 按键按下: ${keyValue}`);
+            };
+
+            const handlePressEnd = (e) => {
                 e.preventDefault();
                 key.classList.remove('pressed');
-                this.log(`👆 按键触摸结束: ${keyValue}`);
-                // 触摸结束时也触发按键处理
-                this.handleKeyPress(key);
+                if (this.keyPressStartTimes[keyValue]) {
+                    const pressDuration = performance.now() - this.keyPressStartTimes[keyValue];
+                    delete this.keyPressStartTimes[keyValue];
+                    this.log(`👆 按键释放: ${keyValue}, 时长: ${Math.round(pressDuration)}ms`);
+                    this.handleKeyPress(key, Math.round(pressDuration));
+                }
+            };
+            
+            // 鼠标事件
+            key.addEventListener('mousedown', handlePressStart);
+            key.addEventListener('mouseup', handlePressEnd);
+            key.addEventListener('mouseleave', (e) => {
+                 // 如果按着鼠标移出按钮，也算释放
+                if (this.keyPressStartTimes[keyValue]) {
+                    handlePressEnd(e);
+                }
             });
+
+            // 触摸事件
+            key.addEventListener('touchstart', handlePressStart, { passive: false });
+            key.addEventListener('touchend', handlePressEnd);
         });
         
         this.log(`⌨️ 已绑定 ${this.keys.length} 个按键事件`);
@@ -221,7 +233,7 @@ class PiKeyboard {
         // 设置自动刷新统计信息
         this.startStatsAutoRefresh();
         
-        this.updateStatus('就绪 (双击屏幕或长按此处显示调试日志)', 'success');
+        this.updateStatus('就绪 - 并发处理模式 (双击屏幕或长按此处显示调试日志)', 'success');
         this.log('✅ 初始化完成');
     }
     
@@ -286,13 +298,12 @@ class PiKeyboard {
             (avgLatency <= 100 ? 'success' : avgLatency <= 500 ? 'warning' : 'error');
         
         const processing = stats.currently_processing;
-        this.statsElements.processingStatus.textContent = processing ? '处理中' : '空闲';
+        this.statsElements.processingStatus.textContent = processing ? `${processing}个并发` : '空闲';
         this.statsElements.processingStatus.className = 'stat-value ' + 
             (processing ? 'warning' : 'success');
         
-        // 更新延迟分析
+        // 更新延迟分析 (移除队列延迟显示)
         if (stats.latency_breakdown) {
-            this.statsElements.queueLatency.textContent = `${stats.latency_breakdown.queue_ms || 0}ms`;
             this.statsElements.processLatency.textContent = `${stats.latency_breakdown.process_ms || 0}ms`;
             this.statsElements.networkLatency.textContent = `${stats.latency_breakdown.network_ms || 0}ms`;
         }
@@ -303,14 +314,14 @@ class PiKeyboard {
         }
     }
     
-    async handleKeyPress(keyElement) {
+    async handleKeyPress(keyElement, duration = 50) {
         const keyValue = keyElement.dataset.key;
         if (!keyValue) {
             this.log('❌ 按键元素缺少 data-key 属性', 'error');
             return;
         }
         
-        this.log(`🎯 [开始] 按键点击事件触发: ${keyValue}`, 'info');
+        this.log(`🎯 [开始] 按键点击事件触发: ${keyValue}, 时长: ${duration}ms`, 'info');
         this.log(`🌍 当前网络状态: ${navigator.onLine ? '在线' : '离线'}`);
         this.log(`🔗 API基础URL: ${this.apiBase}`);
         
@@ -328,17 +339,17 @@ class PiKeyboard {
         const startTime = performance.now();
         
         // 异步处理，不阻塞UI
-        this.pressKeyAsync(keyValue, requestId, startTime);
+        this.pressKeyAsync(keyValue, requestId, startTime, duration);
         
         // 立即更新状态
         this.updateStatus(`按下 ${keyValue.toUpperCase()}`, 'loading');
     }
     
-    async pressKeyAsync(keyValue, requestId, startTime) {
+    async pressKeyAsync(keyValue, requestId, startTime, duration) {
         try {
-            this.log(`📤 [${requestId}] 发送请求到: /press?key=${keyValue}&duration=50`);
+            this.log(`📤 [${requestId}] 发送请求到: /press?key=${keyValue}&duration=${duration}`);
             
-            await this.pressKey(keyValue, 50); // 减少持续时间到50ms
+            await this.pressKey(keyValue, duration);
             
             const endTime = performance.now();
             const latency = Math.round(endTime - startTime);
@@ -356,7 +367,7 @@ class PiKeyboard {
         
         // 1秒后恢复就绪状态
         setTimeout(() => {
-            this.updateStatus('就绪', 'success');
+            this.updateStatus('就绪 - 并发处理', 'success');
         }, 1000);
     }
     
@@ -405,7 +416,7 @@ class PiKeyboard {
         
         // 2秒后恢复就绪状态
         setTimeout(() => {
-            this.updateStatus('就绪', 'success');
+            this.updateStatus('就绪 - 并发处理', 'success');
         }, 2000);
     }
     
@@ -534,7 +545,7 @@ class PiKeyboard {
         }
     }
     
-    // 更新延迟图表
+    // 更新延迟图表 (简化版，移除队列延迟)
     updateLatencyChart(latencyHistory) {
         const canvas = document.getElementById('latencyChart');
         if (!canvas) return;
@@ -579,18 +590,17 @@ class PiKeyboard {
             ctx.stroke();
         }
         
-        // 绘制面积图
+        // 绘制面积图 (只显示处理延迟和网络延迟)
         if (latencyHistory.length > 1) {
             const xStep = chartWidth / (latencyHistory.length - 1);
             
-            // 绘制叠加面积图
+            // 绘制叠加面积图 (移除队列延迟)
             const colors = [
                 'rgba(255, 99, 132, 0.6)',  // 网络延迟 - 红色
                 'rgba(54, 162, 235, 0.6)',  // 处理延迟 - 蓝色
-                'rgba(255, 206, 86, 0.6)'   // 队列延迟 - 黄色
             ];
             
-            const layers = ['network_latency', 'process_latency', 'queue_latency'];
+            const layers = ['network_latency', 'process_latency'];
             
             layers.forEach((layer, layerIndex) => {
                 ctx.fillStyle = colors[layerIndex];
@@ -642,8 +652,6 @@ class PiKeyboard {
             const y = margin.top + (chartHeight / 5) * i;
             ctx.fillText(`${value.toFixed(1)}ms`, margin.left - 5, y + 4);
         }
-        
-
     }
     
     // 页面卸载时清理资源

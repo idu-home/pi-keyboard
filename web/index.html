@@ -31,20 +31,16 @@
                         <span class="stat-value" id="avgLatency">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">处理状态</span>
+                        <span class="stat-label">并发处理</span>
                         <span class="stat-value" id="processingStatus">-</span>
                     </div>
                 </div>
                 
                 <!-- 延迟分析区域 -->
                 <div class="latency-analysis">
-                    <h4>延迟分析</h4>
+                    <h4>延迟分析 (并发处理模式)</h4>
                     
                     <div class="latency-breakdown">
-                        <div class="latency-item">
-                            <span class="latency-label">队列等待</span>
-                            <span class="latency-value" id="queueLatency">-</span>
-                        </div>
                         <div class="latency-item">
                             <span class="latency-label">实际处理</span>
                             <span class="latency-value" id="processLatency">-</span>
@@ -63,10 +59,6 @@
                             <!-- 图例说明 -->
                             <div class="latency-legend">
                                 <div class="legend-item">
-                                    <div class="legend-color queue-color"></div>
-                                    <span class="legend-text">队列等待</span>
-                                </div>
-                                <div class="legend-item">
                                     <div class="legend-color process-color"></div>
                                     <span class="legend-text">实际处理</span>
                                 </div>
@@ -77,7 +69,7 @@
                             </div>
                         </div>
                         <div class="chart-description">
-                            <small>叠加面积图显示各阶段延迟分布，越高表示延迟越大</small>
+                            <small>并发处理模式：无队列等待，每个请求独立处理</small>
                         </div>
                     </div>
                 </div>
@@ -90,96 +82,95 @@
 
             <!-- 文本输入区域 -->
             <section class="text-input-section">
+                <h3>文本输入</h3>
                 <div class="input-group">
-                    <textarea id="textInput" placeholder="在此输入文本，然后点击发送按钮"></textarea>
+                    <textarea id="textInput" placeholder="输入要发送的文本...&#10;支持 Ctrl+Enter 或 Cmd+Enter 快速发送"></textarea>
                     <button id="sendText" class="send-btn">发送文本</button>
                 </div>
             </section>
 
-            <!-- 键盘区域 -->
+            <!-- 虚拟键盘区域 -->
             <section class="keyboard-section">
+                <h3>虚拟键盘</h3>
+                
                 <!-- 数字行 -->
                 <div class="keyboard-row">
-                    <button class="key" data-key="1">1</button>
-                    <button class="key" data-key="2">2</button>
-                    <button class="key" data-key="3">3</button>
-                    <button class="key" data-key="4">4</button>
-                    <button class="key" data-key="5">5</button>
-                    <button class="key" data-key="6">6</button>
-                    <button class="key" data-key="7">7</button>
-                    <button class="key" data-key="8">8</button>
-                    <button class="key" data-key="9">9</button>
-                    <button class="key" data-key="0">0</button>
-                    <button class="key special" data-key="backspace">⌫</button>
+                    <div class="key" data-key="1">1</div>
+                    <div class="key" data-key="2">2</div>
+                    <div class="key" data-key="3">3</div>
+                    <div class="key" data-key="4">4</div>
+                    <div class="key" data-key="5">5</div>
+                    <div class="key" data-key="6">6</div>
+                    <div class="key" data-key="7">7</div>
+                    <div class="key" data-key="8">8</div>
+                    <div class="key" data-key="9">9</div>
+                    <div class="key" data-key="0">0</div>
                 </div>
-
+                
                 <!-- 第一行字母 -->
                 <div class="keyboard-row">
-                    <button class="key" data-key="q">Q</button>
-                    <button class="key" data-key="w">W</button>
-                    <button class="key" data-key="e">E</button>
-                    <button class="key" data-key="r">R</button>
-                    <button class="key" data-key="t">T</button>
-                    <button class="key" data-key="y">Y</button>
-                    <button class="key" data-key="u">U</button>
-                    <button class="key" data-key="i">I</button>
-                    <button class="key" data-key="o">O</button>
-                    <button class="key" data-key="p">P</button>
+                    <div class="key" data-key="q">Q</div>
+                    <div class="key" data-key="w">W</div>
+                    <div class="key" data-key="e">E</div>
+                    <div class="key" data-key="r">R</div>
+                    <div class="key" data-key="t">T</div>
+                    <div class="key" data-key="y">Y</div>
+                    <div class="key" data-key="u">U</div>
+                    <div class="key" data-key="i">I</div>
+                    <div class="key" data-key="o">O</div>
+                    <div class="key" data-key="p">P</div>
                 </div>
-
+                
                 <!-- 第二行字母 -->
                 <div class="keyboard-row">
-                    <button class="key" data-key="a">A</button>
-                    <button class="key" data-key="s">S</button>
-                    <button class="key" data-key="d">D</button>
-                    <button class="key" data-key="f">F</button>
-                    <button class="key" data-key="g">G</button>
-                    <button class="key" data-key="h">H</button>
-                    <button class="key" data-key="j">J</button>
-                    <button class="key" data-key="k">K</button>
-                    <button class="key" data-key="l">L</button>
-                    <button class="key special" data-key="enter">Enter</button>
+                    <div class="key" data-key="a">A</div>
+                    <div class="key" data-key="s">S</div>
+                    <div class="key" data-key="d">D</div>
+                    <div class="key" data-key="f">F</div>
+                    <div class="key" data-key="g">G</div>
+                    <div class="key" data-key="h">H</div>
+                    <div class="key" data-key="j">J</div>
+                    <div class="key" data-key="k">K</div>
+                    <div class="key" data-key="l">L</div>
                 </div>
-
+                
                 <!-- 第三行字母 -->
                 <div class="keyboard-row">
-                    <button class="key modifier" data-key="shift">Shift</button>
-                    <button class="key" data-key="z">Z</button>
-                    <button class="key" data-key="x">X</button>
-                    <button class="key" data-key="c">C</button>
-                    <button class="key" data-key="v">V</button>
-                    <button class="key" data-key="b">B</button>
-                    <button class="key" data-key="n">N</button>
-                    <button class="key" data-key="m">M</button>
-                    <button class="key special" data-key="esc">Esc</button>
+                    <div class="key" data-key="z">Z</div>
+                    <div class="key" data-key="x">X</div>
+                    <div class="key" data-key="c">C</div>
+                    <div class="key" data-key="v">V</div>
+                    <div class="key" data-key="b">B</div>
+                    <div class="key" data-key="n">N</div>
+                    <div class="key" data-key="m">M</div>
                 </div>
-
-                <!-- 空格和功能键 -->
+                
+                <!-- 功能键行 -->
                 <div class="keyboard-row">
-                    <button class="key modifier" data-key="ctrl">Ctrl</button>
-                    <button class="key modifier" data-key="alt">Alt</button>
-                    <button class="key space" data-key="space">Space</button>
-                    <button class="key" data-key="tab">Tab</button>
+                    <div class="key special" data-key="space">空格</div>
+                    <div class="key special" data-key="enter">回车</div>
+                    <div class="key special" data-key="backspace">删除</div>
+                    <div class="key special" data-key="tab">Tab</div>
                 </div>
-
+                
                 <!-- 方向键 -->
                 <div class="keyboard-row arrow-row">
                     <div class="arrow-group">
-                        <button class="key arrow" data-key="up">↑</button>
+                        <div class="key arrow" data-key="up">↑</div>
                         <div class="arrow-bottom">
-                            <button class="key arrow" data-key="left">←</button>
-                            <button class="key arrow" data-key="down">↓</button>
-                            <button class="key arrow" data-key="right">→</button>
+                            <div class="key arrow" data-key="left">←</div>
+                            <div class="key arrow" data-key="down">↓</div>
+                            <div class="key arrow" data-key="right">→</div>
                         </div>
                     </div>
                 </div>
             </section>
-
-            <!-- 状态显示 -->
-            <section class="status-section">
-                <div id="status" class="status-display">就绪</div>
-            </section>
         </main>
+
+        <!-- 状态显示 -->
+        <section class="status-section">
+            <div id="status" class="status-display">正在初始化...</div>
+        </section>
     </div>
 
     <script src="script.js"></script>

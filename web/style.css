@@ -168,44 +168,31 @@ main {
 
 /* 图例样式 */
 .latency-legend {
-    flex-shrink: 0;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    border: 1px solid #e9ecef;
-    min-width: 140px;
-    align-self: flex-start;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 10px;
+    font-size: 12px;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    margin-bottom: 12px;
-}
-
-.legend-item:last-child {
-    margin-bottom: 0;
+    gap: 5px;
 }
 
 .legend-color {
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    margin-right: 10px;
-    flex-shrink: 0;
-    border: 1px solid #ddd;
-}
-
-.queue-color {
-    background-color: rgba(255, 206, 84, 0.8);
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
 }
 
 .process-color {
-    background-color: rgba(54, 162, 235, 0.8);
+    background-color: rgba(54, 162, 235, 0.6);
 }
 
 .network-color {
-    background-color: rgba(255, 99, 132, 0.8);
+    background-color: rgba(255, 99, 132, 0.6);
 }
 
 .legend-text {
@@ -217,7 +204,7 @@ main {
 
 .latency-breakdown {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 15px;
     margin-bottom: 20px;
 }
@@ -568,4 +555,4 @@ main {
 
 .key.animate {
     animation: keyPress 0.15s ease-in-out;
-} 
+}
