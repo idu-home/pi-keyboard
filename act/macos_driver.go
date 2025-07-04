@@ -60,7 +60,7 @@ func (d *MacOSDriver) Press(key string, duration time.Duration) error {
 
 	if err != nil {
 		log.Printf("[MACOS] AppleScript 执行失败 - 按键: %s, 错误: %v", key, err)
-		return fmt.Errorf("执行 AppleScript 失败: %v", err)
+		return fmt.Errorf("执行 applescript 失败: %v", err)
 	}
 
 	// 不等待持续时间，让系统自然处理按键释放

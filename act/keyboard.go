@@ -152,9 +152,17 @@ func (k *Keyboard) GetStats() *KeyboardStats {
 	k.stats.mu.RLock()
 	defer k.stats.mu.RUnlock()
 
-	stats := *k.stats
-	stats.CurrentlyProcessing = atomic.LoadInt64(&k.stats.CurrentlyProcessing)
-	return &stats
+	return &KeyboardStats{
+		TotalRequests:       k.stats.TotalRequests,
+		SuccessRequests:     k.stats.SuccessRequests,
+		FailedRequests:      k.stats.FailedRequests,
+		RejectedRequests:    k.stats.RejectedRequests,
+		AverageLatency:      k.stats.AverageLatency,
+		LastRequestTime:     k.stats.LastRequestTime,
+		CurrentlyProcessing: atomic.LoadInt64(&k.stats.CurrentlyProcessing),
+		latencySum:          k.stats.latencySum,
+		latencyCount:        k.stats.latencyCount,
+	}
 }
 
 // updateStats 更新统计信息

@@ -40,13 +40,13 @@ func (f *DriverFactory) createAutoDetectedDriver(config *DriverConfig) (Keyboard
 		if f.hasHIDGadgetSupport(config.OutputFile) {
 			return NewLinuxOTGDriver(config.OutputFile), nil
 		}
-		return nil, fmt.Errorf("Linux 系统未检测到 HID Gadget 支持，请确保 /dev/hidg0 存在")
+		return nil, fmt.Errorf("linux 系统未检测到 hid gadget 支持，请确保 /dev/hidg0 存在")
 
 	case "darwin": // Mac OS
 		return NewMacOSDriver(), nil
 
 	case "windows":
-		return nil, fmt.Errorf("Windows 平台暂未实现，请使用 Linux 或 Mac OS")
+		return nil, fmt.Errorf("windows 平台暂未实现，请使用 linux 或 mac OS")
 
 	default:
 		return nil, fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
@@ -63,7 +63,7 @@ func (f *DriverFactory) createSpecificDriver(driverType string, config *DriverCo
 		return NewMacOSDriver(), nil
 
 	case DriverTypeWindows:
-		return nil, fmt.Errorf("Windows 驱动暂未实现")
+		return nil, fmt.Errorf("windows 驱动暂未实现")
 
 	default:
 		return nil, fmt.Errorf("未知的驱动类型: %s", driverType)

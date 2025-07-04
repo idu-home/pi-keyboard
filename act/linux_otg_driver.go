@@ -112,7 +112,7 @@ func (d *LinuxOTGDriver) sendHIDReport() error {
 
 	_, err = file.Write(report[:])
 	if err != nil {
-		return fmt.Errorf("写入 HID 报文失败: %v", err)
+		return fmt.Errorf("写入 hid 报文失败: %v", err)
 	}
 
 	return nil
