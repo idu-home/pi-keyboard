@@ -4,6 +4,7 @@ class PiKeyboard {
         this.textInput = document.getElementById('textInput');
         this.sendTextButton = document.getElementById('sendText');
         this.refreshStatsButton = document.getElementById('refreshStats');
+        this.debugToggleButton = document.getElementById('toggleDebug');
         this.keys = document.querySelectorAll('.key');
         
         // 统计信息元素
@@ -14,18 +15,135 @@ class PiKeyboard {
             processingStatus: document.getElementById('processingStatus')
         };
         
-        this.isProcessing = false;
         this.apiBase = window.location.origin;
         this.statsInterval = null;
+        this.requestCount = 0;
+        this.debugLogVisible = false;
+        
+        // 添加日志系统
+        this.enableDebugLog();
         
         this.init();
     }
     
+    // 启用调试日志
+    enableDebugLog() {
+        this.log('🚀 Pi Keyboard 初始化');
+        this.log(`📍 API Base URL: ${this.apiBase}`);
+        this.log(`🌐 User Agent: ${navigator.userAgent}`);
+        this.log(`📱 Screen Size: ${window.screen.width}x${window.screen.height}`);
+        this.log(`🔗 当前页面URL: ${window.location.href}`);
+        this.log(`🌍 网络状态: ${navigator.onLine ? '在线' : '离线'}`);
+        this.log(`🕐 页面加载时间: ${new Date().toLocaleString()}`);
+        
+        // 监听网络状态
+        window.addEventListener('online', () => {
+            this.log('🌐 网络连接已恢复');
+        });
+        
+        window.addEventListener('offline', () => {
+            this.log('❌ 网络连接已断开');
+        });
+        
+        // 监听页面可见性变化
+        document.addEventListener('visibilitychange', () => {
+            this.log(`👁️ 页面可见性变化: ${document.visibilityState}`);
+        });
+    }
+    
+    // 日志函数
+    log(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logMessage = `[${timestamp}] ${message}`;
+        
+        console.log(logMessage);
+        
+        // 在状态栏显示重要日志
+        if (type === 'error' || type === 'warning') {
+            this.updateStatus(message, type);
+        }
+        
+        // 可选：在页面上显示日志（用于移动端调试）
+        this.showDebugLog(logMessage, type);
+    }
+    
+    // 在页面上显示调试日志
+    showDebugLog(message, type) {
+        // 创建或获取日志容器
+        let logContainer = document.getElementById('debug-log');
+        if (!logContainer) {
+            logContainer = document.createElement('div');
+            logContainer.id = 'debug-log';
+            logContainer.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 300px;
+                max-height: 200px;
+                overflow-y: auto;
+                background: rgba(0,0,0,0.9);
+                color: white;
+                font-size: 11px;
+                padding: 8px;
+                border-radius: 8px;
+                z-index: 1000;
+                display: none;
+                font-family: monospace;
+                border: 1px solid #333;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+            document.body.appendChild(logContainer);
+        }
+        
+        const logEntry = document.createElement('div');
+        logEntry.textContent = message;
+        logEntry.style.marginBottom = '2px';
+        
+        if (type === 'error') logEntry.style.color = '#ff6b6b';
+        if (type === 'warning') logEntry.style.color = '#feca57';
+        if (type === 'success') logEntry.style.color = '#48dbfb';
+        
+        logContainer.appendChild(logEntry);
+        
+        // 保持最新的20条日志
+        while (logContainer.children.length > 20) {
+            logContainer.removeChild(logContainer.firstChild);
+        }
+        
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    // 切换调试日志显示
+    toggleDebugLog() {
+        const logContainer = document.getElementById('debug-log');
+        if (logContainer) {
+            this.debugLogVisible = !this.debugLogVisible;
+            logContainer.style.display = this.debugLogVisible ? 'block' : 'none';
+            
+            // 更新按钮状态
+            if (this.debugLogVisible) {
+                this.debugToggleButton.classList.add('active');
+                this.debugToggleButton.textContent = '隐藏日志';
+                this.log('📋 调试日志已显示');
+            } else {
+                this.debugToggleButton.classList.remove('active');
+                this.debugToggleButton.textContent = '调试日志';
+                this.log('📋 调试日志已隐藏');
+            }
+        }
+    }
+    
     init() {
+        this.log('⚙️ 开始初始化组件');
+        
         // 绑定键盘按键事件
-        this.keys.forEach(key => {
+        this.keys.forEach((key, index) => {
+            const keyValue = key.dataset.key;
+            this.log(`🔧 绑定按键 [${index}]: ${keyValue || '未定义'}`);
+            
             key.addEventListener('click', (e) => {
                 e.preventDefault();
+                this.log(`👆 按键点击事件: ${keyValue}`);
                 this.handleKeyPress(key);
             });
             
@@ -33,13 +151,19 @@ class PiKeyboard {
             key.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 key.classList.add('pressed');
+                this.log(`👆 按键触摸开始: ${keyValue}`);
             });
             
             key.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 key.classList.remove('pressed');
+                this.log(`👆 按键触摸结束: ${keyValue}`);
+                // 触摸结束时也触发按键处理
+                this.handleKeyPress(key);
             });
         });
+        
+        this.log(`⌨️ 已绑定 ${this.keys.length} 个按键事件`);
         
         // 绑定发送文本按钮事件
         this.sendTextButton.addEventListener('click', () => {
@@ -49,6 +173,11 @@ class PiKeyboard {
         // 绑定刷新统计按钮事件
         this.refreshStatsButton.addEventListener('click', () => {
             this.refreshStats();
+        });
+        
+        // 绑定调试按钮事件
+        this.debugToggleButton.addEventListener('click', () => {
+            this.toggleDebugLog();
         });
         
         // 绑定文本输入框回车事件
@@ -67,19 +196,25 @@ class PiKeyboard {
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
             const now = (new Date()).getTime();
+            
+            // 防止双击缩放
             if (now - lastTouchEnd <= 300) {
                 e.preventDefault();
+            } else {
+                touchCount = 1;
             }
             lastTouchEnd = now;
         }, false);
         
         // 初始化统计信息
+        this.log('📊 初始化统计信息');
         this.refreshStats();
         
         // 设置自动刷新统计信息
         this.startStatsAutoRefresh();
         
-        this.updateStatus('就绪', 'success');
+        this.updateStatus('就绪 (双击屏幕或长按此处显示调试日志)', 'success');
+        this.log('✅ 初始化完成');
     }
     
     // 开始自动刷新统计信息
@@ -87,6 +222,7 @@ class PiKeyboard {
         this.statsInterval = setInterval(() => {
             this.refreshStats(true); // 静默刷新
         }, 3000); // 每3秒刷新一次
+        this.log('🔄 启动自动刷新统计 (3秒间隔)');
     }
     
     // 停止自动刷新
@@ -94,6 +230,7 @@ class PiKeyboard {
         if (this.statsInterval) {
             clearInterval(this.statsInterval);
             this.statsInterval = null;
+            this.log('⏹️ 停止自动刷新统计');
         }
     }
     
@@ -103,13 +240,18 @@ class PiKeyboard {
             if (!silent) {
                 this.refreshStatsButton.textContent = '刷新中...';
                 this.refreshStatsButton.disabled = true;
+                this.log('📊 手动刷新统计信息');
             }
             
             const stats = await this.getStats();
             this.updateStatsDisplay(stats);
             
+            if (!silent) {
+                this.log('📊 统计信息刷新成功', 'success');
+            }
+            
         } catch (error) {
-            console.error('获取统计信息失败:', error);
+            this.log(`❌ 获取统计信息失败: ${error.message}`, 'error');
             if (!silent) {
                 this.updateStatus('获取统计信息失败', 'error');
             }
@@ -142,13 +284,20 @@ class PiKeyboard {
     }
     
     async handleKeyPress(keyElement) {
-        if (this.isProcessing) {
-            this.updateStatus('请等待上一个操作完成', 'error');
+        const keyValue = keyElement.dataset.key;
+        if (!keyValue) {
+            this.log('❌ 按键元素缺少 data-key 属性', 'error');
             return;
         }
         
-        const keyValue = keyElement.dataset.key;
-        if (!keyValue) return;
+        this.log(`🎯 [开始] 按键点击事件触发: ${keyValue}`, 'info');
+        this.log(`🌍 当前网络状态: ${navigator.onLine ? '在线' : '离线'}`);
+        this.log(`🔗 API基础URL: ${this.apiBase}`);
+        
+        this.requestCount++;
+        const requestId = this.requestCount;
+        
+        this.log(`🔵 [${requestId}] 开始按键请求: ${keyValue.toUpperCase()}`);
         
         // 添加按键动画
         keyElement.classList.add('animate');
@@ -158,112 +307,159 @@ class PiKeyboard {
         
         const startTime = performance.now();
         
+        // 异步处理，不阻塞UI
+        this.pressKeyAsync(keyValue, requestId, startTime);
+        
+        // 立即更新状态
+        this.updateStatus(`按下 ${keyValue.toUpperCase()}`, 'loading');
+    }
+    
+    async pressKeyAsync(keyValue, requestId, startTime) {
         try {
-            this.isProcessing = true;
-            this.updateStatus(`按下 ${keyValue.toUpperCase()}`, 'loading');
+            this.log(`📤 [${requestId}] 发送请求到: /press?key=${keyValue}&duration=50`);
             
-            await this.pressKey(keyValue);
+            await this.pressKey(keyValue, 50); // 减少持续时间到50ms
             
             const endTime = performance.now();
             const latency = Math.round(endTime - startTime);
             
-            this.updateStatus(`${keyValue.toUpperCase()} 按键成功 (${latency}ms)`, 'success');
+            this.log(`✅ [${requestId}] 按键成功: ${keyValue.toUpperCase()} (${latency}ms)`, 'success');
+            this.updateStatus(`${keyValue.toUpperCase()} 已发送 (${latency}ms)`, 'success');
             
         } catch (error) {
             const endTime = performance.now();
             const latency = Math.round(endTime - startTime);
             
-            console.error('按键失败:', error);
+            this.log(`❌ [${requestId}] 按键失败: ${error.message} (${latency}ms)`, 'error');
             this.updateStatus(`按键失败: ${error.message} (${latency}ms)`, 'error');
-        } finally {
-            this.isProcessing = false;
-            // 2秒后恢复就绪状态
-            setTimeout(() => {
-                if (!this.isProcessing) {
-                    this.updateStatus('就绪', 'success');
-                }
-            }, 2000);
         }
+        
+        // 1秒后恢复就绪状态
+        setTimeout(() => {
+            this.updateStatus('就绪', 'success');
+        }, 1000);
     }
     
     async sendText() {
         const text = this.textInput.value.trim();
         if (!text) {
+            this.log('⚠️ 文本输入为空', 'warning');
             this.updateStatus('请输入要发送的文本', 'error');
             return;
         }
         
-        if (this.isProcessing) {
-            this.updateStatus('请等待上一个操作完成', 'error');
-            return;
-        }
+        this.requestCount++;
+        const requestId = this.requestCount;
+        
+        this.log(`🔵 [${requestId}] 开始文本输入请求: "${text}"`);
         
         const startTime = performance.now();
         
+        // 异步处理文本输入
+        this.typeTextAsync(text, requestId, startTime);
+        
+        // 立即更新状态和清空输入框
+        this.updateStatus('正在发送文本...', 'loading');
+        this.textInput.value = '';
+    }
+    
+    async typeTextAsync(text, requestId, startTime) {
         try {
-            this.isProcessing = true;
-            this.updateStatus('正在发送文本...', 'loading');
+            this.log(`📤 [${requestId}] 发送POST请求到: /type`);
             
             await this.typeText(text);
             
             const endTime = performance.now();
             const latency = Math.round(endTime - startTime);
             
-            this.updateStatus(`文本发送成功 (${latency}ms): "${text}"`, 'success');
-            this.textInput.value = '';
+            this.log(`✅ [${requestId}] 文本输入成功 (${latency}ms): "${text}"`, 'success');
+            this.updateStatus(`文本已发送 (${latency}ms): "${text}"`, 'success');
             
         } catch (error) {
             const endTime = performance.now();
             const latency = Math.round(endTime - startTime);
             
-            console.error('发送文本失败:', error);
+            this.log(`❌ [${requestId}] 文本输入失败 (${latency}ms): ${error.message}`, 'error');
             this.updateStatus(`发送失败 (${latency}ms): ${error.message}`, 'error');
-        } finally {
-            this.isProcessing = false;
-            // 3秒后恢复就绪状态
-            setTimeout(() => {
-                if (!this.isProcessing) {
-                    this.updateStatus('就绪', 'success');
-                }
-            }, 3000);
         }
+        
+        // 2秒后恢复就绪状态
+        setTimeout(() => {
+            this.updateStatus('就绪', 'success');
+        }, 2000);
     }
     
-    async pressKey(key, duration = 100) {
-        const response = await fetch(`${this.apiBase}/press?key=${encodeURIComponent(key)}&duration=${duration}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
+    async pressKey(key, duration = 50) {
+        const url = `${this.apiBase}/press?key=${encodeURIComponent(key)}&duration=${duration}`;
+        this.log(`🌐 准备发送GET请求: ${url}`);
+        
+        try {
+            this.log(`📡 开始发送请求...`);
+            const fetchStart = performance.now();
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const fetchEnd = performance.now();
+            const fetchTime = Math.round(fetchEnd - fetchStart);
+            
+            this.log(`📥 收到响应: ${response.status} ${response.statusText} (${fetchTime}ms)`);
+            this.log(`📥 响应头: ${JSON.stringify(Object.fromEntries(response.headers))}`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                this.log(`📥 错误响应内容: ${errorText}`, 'error');
+                throw new Error(errorText || `HTTP ${response.status}`);
             }
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || `HTTP ${response.status}`);
+            
+            const result = await response.text();
+            this.log(`📥 响应内容: "${result}"`);
+            return result;
+            
+        } catch (error) {
+            this.log(`💥 网络请求异常: ${error.message}`, 'error');
+            this.log(`💥 错误类型: ${error.constructor.name}`, 'error');
+            this.log(`💥 错误堆栈: ${error.stack}`, 'error');
+            throw error;
         }
-        
-        return await response.text();
     }
     
     async typeText(text) {
-        const response = await fetch(`${this.apiBase}/type`, {
+        const url = `${this.apiBase}/type`;
+        const body = JSON.stringify({ text });
+        
+        this.log(`🌐 POST ${url}`);
+        this.log(`📤 请求体: ${body}`);
+        
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ text })
+            body: body
         });
+        
+        this.log(`📥 响应状态: ${response.status} ${response.statusText}`);
         
         if (!response.ok) {
             const errorText = await response.text();
+            this.log(`📥 错误响应内容: ${errorText}`, 'error');
             throw new Error(errorText || `HTTP ${response.status}`);
         }
         
-        return await response.text();
+        const result = await response.text();
+        this.log(`📥 响应内容: ${result}`);
+        return result;
     }
     
     async getStats() {
-        const response = await fetch(`${this.apiBase}/stats`, {
+        const url = `${this.apiBase}/stats`;
+        
+        const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -279,20 +475,31 @@ class PiKeyboard {
     }
     
     async sendActions(actions) {
-        const response = await fetch(`${this.apiBase}/actions`, {
+        const url = `${this.apiBase}/actions`;
+        const body = JSON.stringify(actions);
+        
+        this.log(`🌐 POST ${url}`);
+        this.log(`📤 请求体: ${body}`);
+        
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(actions)
+            body: body
         });
+        
+        this.log(`📥 响应状态: ${response.status} ${response.statusText}`);
         
         if (!response.ok) {
             const errorText = await response.text();
+            this.log(`📥 错误响应内容: ${errorText}`, 'error');
             throw new Error(errorText || `HTTP ${response.status}`);
         }
         
-        return await response.text();
+        const result = await response.text();
+        this.log(`📥 响应内容: ${result}`);
+        return result;
     }
     
     updateStatus(message, type = 'success') {
@@ -310,6 +517,7 @@ class PiKeyboard {
     // 页面卸载时清理资源
     cleanup() {
         this.stopStatsAutoRefresh();
+        this.log('🧹 清理资源完成');
     }
 }
 

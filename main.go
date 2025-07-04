@@ -44,7 +44,8 @@ func main() {
 	log.Printf("可用驱动列表: %v", factory.GetAvailableDrivers())
 
 	// API 接口
-	http.HandleFunc("/press", keyboard.PressHandler)
+	http.HandleFunc("/press", keyboard.PressHandler)          // 异步按键接口（推荐）
+	http.HandleFunc("/press-sync", keyboard.PressHandlerSync) // 同步按键接口
 	http.HandleFunc("/actions", keyboard.ActionsHandler)
 	http.HandleFunc("/type", keyboard.TypeHandler)
 	http.HandleFunc("/stats", keyboard.StatsHandler)

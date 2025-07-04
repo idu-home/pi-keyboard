@@ -1,6 +1,7 @@
 package act
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -24,10 +26,39 @@ var keyMap = map[string]byte{
 	"shift": 0xe1, // 左 shift，右 shift 可扩展
 }
 
+// KeyRequest 按键请求
+type KeyRequest struct {
+	Key      string
+	Duration time.Duration
+	ClientIP string
+	Response chan KeyResponse
+}
+
+// KeyResponse 按键响应
+type KeyResponse struct {
+	Success bool
+	Error   error
+	Latency time.Duration
+}
+
+// TypeRequest 文本输入请求
+type TypeRequest struct {
+	Text string `json:"text"`
+}
+
+// Action 批量操作
+type Action struct {
+	Key      string `json:"key"`
+	Duration int    `json:"duration,omitempty"`
+}
+
 type Keyboard struct {
-	driver     KeyboardDriver
-	globalLock sync.Mutex
-	stats      *KeyboardStats
+	driver      KeyboardDriver
+	stats       *KeyboardStats
+	requestChan chan KeyRequest
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
 }
 
 // KeyboardStats 统计信息
@@ -39,15 +70,80 @@ type KeyboardStats struct {
 	RejectedRequests    int64
 	AverageLatency      time.Duration
 	LastRequestTime     time.Time
-	CurrentlyProcessing bool
+	CurrentlyProcessing int64 // 使用原子操作
 	latencySum          time.Duration
 	latencyCount        int64
 }
 
 func NewKeyboard(driver KeyboardDriver) *Keyboard {
-	return &Keyboard{
-		driver: driver,
-		stats:  &KeyboardStats{},
+	ctx, cancel := context.WithCancel(context.Background())
+	k := &Keyboard{
+		driver:      driver,
+		stats:       &KeyboardStats{},
+		requestChan: make(chan KeyRequest, 100), // 缓冲队列
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+
+	// 启动处理协程
+	k.wg.Add(1)
+	go k.processRequests()
+
+	log.Printf("[KEYBOARD] 异步键盘处理器启动 - 队列大小: 100")
+	return k
+}
+
+// processRequests 异步处理按键请求
+func (k *Keyboard) processRequests() {
+	defer k.wg.Done()
+	log.Printf("[KEYBOARD] 按键处理协程启动")
+
+	for {
+		select {
+		case req := <-k.requestChan:
+			k.handleSingleRequest(req)
+		case <-k.ctx.Done():
+			log.Printf("[KEYBOARD] 按键处理协程停止")
+			return
+		}
+	}
+}
+
+// handleSingleRequest 处理单个按键请求
+func (k *Keyboard) handleSingleRequest(req KeyRequest) {
+	startTime := time.Now()
+	atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
+	defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
+
+	log.Printf("[KEYBOARD] 处理按键请求 - 客户端: %s, 按键: %s, 持续时间: %v",
+		req.ClientIP, req.Key, req.Duration)
+
+	// 执行按键操作
+	err := k.driver.Press(req.Key, req.Duration)
+	latency := time.Since(startTime)
+
+	// 更新统计信息
+	k.updateStats(err == nil, latency, false)
+
+	// 发送响应
+	response := KeyResponse{
+		Success: err == nil,
+		Error:   err,
+		Latency: latency,
+	}
+
+	select {
+	case req.Response <- response:
+	case <-time.After(1 * time.Second):
+		log.Printf("[KEYBOARD] 响应超时 - 客户端: %s, 按键: %s", req.ClientIP, req.Key)
+	}
+
+	if err != nil {
+		log.Printf("[KEYBOARD] 按键执行失败 - 客户端: %s, 按键: %s, 错误: %v, 延迟: %v",
+			req.ClientIP, req.Key, err, latency)
+	} else {
+		log.Printf("[KEYBOARD] 按键执行成功 - 客户端: %s, 按键: %s, 延迟: %v",
+			req.ClientIP, req.Key, latency)
 	}
 }
 
@@ -57,6 +153,7 @@ func (k *Keyboard) GetStats() *KeyboardStats {
 	defer k.stats.mu.RUnlock()
 
 	stats := *k.stats
+	stats.CurrentlyProcessing = atomic.LoadInt64(&k.stats.CurrentlyProcessing)
 	return &stats
 }
 
@@ -85,38 +182,17 @@ func (k *Keyboard) updateStats(success bool, latency time.Duration, rejected boo
 	k.stats.AverageLatency = k.stats.latencySum / time.Duration(k.stats.latencyCount)
 }
 
-// setProcessing 设置处理状态
-func (k *Keyboard) setProcessing(processing bool) {
-	k.stats.mu.Lock()
-	defer k.stats.mu.Unlock()
-	k.stats.CurrentlyProcessing = processing
-}
-
-// /press?key=a&duration=100
+// PressHandler 按键处理接口（异步）
 func (k *Keyboard) PressHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	key := strings.ToLower(r.URL.Query().Get("key"))
 	durationStr := r.URL.Query().Get("duration")
 	clientIP := r.RemoteAddr
 
-	log.Printf("[PRESS] 开始处理请求 - 客户端: %s, 按键: %s, 持续时间: %s", clientIP, key, durationStr)
-
-	if !k.tryLock() {
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		log.Printf("[PRESS] 请求被拒绝 - 客户端: %s, 按键: %s, 原因: 有其他请求正在执行, 延迟: %v", clientIP, key, latency)
-		http.Error(w, "有其他请求正在执行，请稍后重试", http.StatusTooManyRequests)
-		return
-	}
-	defer k.globalLock.Unlock()
-
-	k.setProcessing(true)
-	defer k.setProcessing(false)
-
+	// 快速参数验证
 	if key == "" {
 		latency := time.Since(startTime)
 		k.updateStats(false, latency, false)
-		log.Printf("[PRESS] 请求失败 - 客户端: %s, 原因: 按键参数为空, 延迟: %v", clientIP, latency)
 		http.Error(w, "按键参数不能为空", 400)
 		return
 	}
@@ -124,140 +200,163 @@ func (k *Keyboard) PressHandler(w http.ResponseWriter, r *http.Request) {
 	if !k.driver.IsKeySupported(key) {
 		latency := time.Since(startTime)
 		k.updateStats(false, latency, false)
-		log.Printf("[PRESS] 请求失败 - 客户端: %s, 按键: %s, 原因: 不支持的按键, 延迟: %v", clientIP, key, latency)
 		http.Error(w, "不支持的按键: "+key, 400)
 		return
 	}
 
-	duration := 50 // ms
+	// 解析持续时间
+	duration := 50 * time.Millisecond // 默认50ms
 	if durationStr != "" {
-		if _, err := fmt.Sscanf(durationStr, "%d", &duration); err != nil {
-			log.Printf("[PRESS] 警告 - 客户端: %s, 按键: %s, 持续时间解析失败: %v, 使用默认值: %d", clientIP, key, err, duration)
+		var durationMs int
+		if _, err := fmt.Sscanf(durationStr, "%d", &durationMs); err == nil {
+			duration = time.Duration(durationMs) * time.Millisecond
 		}
 	}
 
-	log.Printf("[PRESS] 执行按键操作 - 客户端: %s, 按键: %s, 持续时间: %dms", clientIP, key, duration)
+	// 检查队列是否满
+	select {
+	case k.requestChan <- KeyRequest{
+		Key:      key,
+		Duration: duration,
+		ClientIP: clientIP,
+		Response: make(chan KeyResponse, 1),
+	}:
+		// 请求已加入队列，立即返回成功
+		io.WriteString(w, "queued")
+		log.Printf("[PRESS] 请求已入队 - 客户端: %s, 按键: %s, 队列延迟: %v",
+			clientIP, key, time.Since(startTime))
 
-	pressStart := time.Now()
-	err := k.driver.Press(key, time.Duration(duration)*time.Millisecond)
-	pressLatency := time.Since(pressStart)
-	totalLatency := time.Since(startTime)
+	default:
+		// 队列已满，拒绝请求
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, true)
+		log.Printf("[PRESS] 队列已满，请求被拒绝 - 客户端: %s, 按键: %s", clientIP, key)
+		http.Error(w, "服务器繁忙，请稍后重试", http.StatusTooManyRequests)
+	}
+}
 
-	if err != nil {
-		k.updateStats(false, totalLatency, false)
-		log.Printf("[PRESS] 按键执行失败 - 客户端: %s, 按键: %s, 错误: %v, 按键延迟: %v, 总延迟: %v", clientIP, key, err, pressLatency, totalLatency)
-		http.Error(w, err.Error(), 500)
+// PressHandlerSync 同步按键处理接口（用于需要确认的场景）
+func (k *Keyboard) PressHandlerSync(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	key := strings.ToLower(r.URL.Query().Get("key"))
+	durationStr := r.URL.Query().Get("duration")
+	clientIP := r.RemoteAddr
+
+	// 快速参数验证
+	if key == "" {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "按键参数不能为空", 400)
 		return
 	}
 
-	k.updateStats(true, totalLatency, false)
-	log.Printf("[PRESS] 按键执行成功 - 客户端: %s, 按键: %s, 按键延迟: %v, 总延迟: %v", clientIP, key, pressLatency, totalLatency)
+	if !k.driver.IsKeySupported(key) {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "不支持的按键: "+key, 400)
+		return
+	}
 
-	io.WriteString(w, "ok")
+	// 解析持续时间
+	duration := 50 * time.Millisecond
+	if durationStr != "" {
+		var durationMs int
+		if _, err := fmt.Sscanf(durationStr, "%d", &durationMs); err == nil {
+			duration = time.Duration(durationMs) * time.Millisecond
+		}
+	}
+
+	// 创建响应通道
+	responseChan := make(chan KeyResponse, 1)
+
+	// 发送请求
+	select {
+	case k.requestChan <- KeyRequest{
+		Key:      key,
+		Duration: duration,
+		ClientIP: clientIP,
+		Response: responseChan,
+	}:
+		// 等待响应
+		select {
+		case response := <-responseChan:
+			if response.Success {
+				io.WriteString(w, "ok")
+			} else {
+				http.Error(w, response.Error.Error(), 500)
+			}
+		case <-time.After(10 * time.Second):
+			http.Error(w, "请求超时", 504)
+		}
+
+	default:
+		// 队列已满
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, true)
+		http.Error(w, "服务器繁忙，请稍后重试", http.StatusTooManyRequests)
+	}
 }
 
-type Action struct {
-	Key      string `json:"key"`
-	Duration int    `json:"duration,omitempty"`
-}
-
-// TypeRequest 文本输入请求
-type TypeRequest struct {
-	Text string `json:"text"`
-}
-
-// /actions 批量指令接口，每个元素只需 key/duration
+// ActionsHandler 批量操作处理（优化版）
 func (k *Keyboard) ActionsHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	clientIP := r.RemoteAddr
-
-	log.Printf("[ACTIONS] 开始处理批量操作请求 - 客户端: %s", clientIP)
-
-	if !k.tryLock() {
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		log.Printf("[ACTIONS] 请求被拒绝 - 客户端: %s, 原因: 有其他请求正在执行, 延迟: %v", clientIP, latency)
-		http.Error(w, "有其他请求正在执行，请稍后重试", http.StatusTooManyRequests)
-		return
-	}
-	defer k.globalLock.Unlock()
-
-	k.setProcessing(true)
-	defer k.setProcessing(false)
 
 	var actions []Action
 	if err := json.NewDecoder(r.Body).Decode(&actions); err != nil {
 		latency := time.Since(startTime)
 		k.updateStats(false, latency, false)
-		log.Printf("[ACTIONS] JSON解析失败 - 客户端: %s, 错误: %v, 延迟: %v", clientIP, err, latency)
 		http.Error(w, "JSON 解析失败", 400)
 		return
 	}
 
-	log.Printf("[ACTIONS] 解析到 %d 个操作 - 客户端: %s", len(actions), clientIP)
+	if len(actions) == 0 {
+		http.Error(w, "操作列表为空", 400)
+		return
+	}
 
-	for i, act := range actions {
+	// 检查队列容量
+	if len(k.requestChan)+len(actions) > cap(k.requestChan) {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, true)
+		http.Error(w, "批量操作过多，服务器繁忙", http.StatusTooManyRequests)
+		return
+	}
+
+	// 批量提交请求
+	for _, act := range actions {
 		key := strings.ToLower(act.Key)
 		if !k.driver.IsKeySupported(key) {
-			latency := time.Since(startTime)
-			k.updateStats(false, latency, false)
-			log.Printf("[ACTIONS] 操作失败 - 客户端: %s, 第%d个操作, 按键: %s, 原因: 不支持的按键, 延迟: %v", clientIP, i+1, act.Key, latency)
 			http.Error(w, "不支持的按键: "+act.Key, 400)
 			return
 		}
 
-		dur := act.Duration
-		if dur <= 0 {
-			dur = 50
+		duration := 50 * time.Millisecond
+		if act.Duration > 0 {
+			duration = time.Duration(act.Duration) * time.Millisecond
 		}
 
-		log.Printf("[ACTIONS] 执行第%d个操作 - 客户端: %s, 按键: %s, 持续时间: %dms", i+1, clientIP, key, dur)
-
-		pressStart := time.Now()
-		if err := k.driver.Press(key, time.Duration(dur)*time.Millisecond); err != nil {
-			latency := time.Since(startTime)
-			pressLatency := time.Since(pressStart)
-			k.updateStats(false, latency, false)
-			log.Printf("[ACTIONS] 第%d个操作执行失败 - 客户端: %s, 按键: %s, 错误: %v, 按键延迟: %v, 总延迟: %v", i+1, clientIP, key, err, pressLatency, latency)
-			http.Error(w, err.Error(), 500)
-			return
+		k.requestChan <- KeyRequest{
+			Key:      key,
+			Duration: duration,
+			ClientIP: clientIP,
+			Response: make(chan KeyResponse, 1),
 		}
-
-		pressLatency := time.Since(pressStart)
-		log.Printf("[ACTIONS] 第%d个操作执行成功 - 客户端: %s, 按键: %s, 按键延迟: %v", i+1, clientIP, key, pressLatency)
 	}
 
-	totalLatency := time.Since(startTime)
-	k.updateStats(true, totalLatency, false)
-	log.Printf("[ACTIONS] 批量操作完成 - 客户端: %s, 总操作数: %d, 总延迟: %v", clientIP, len(actions), totalLatency)
-
-	io.WriteString(w, "ok")
+	io.WriteString(w, "queued")
+	log.Printf("[ACTIONS] 批量操作已入队 - 客户端: %s, 操作数: %d", clientIP, len(actions))
 }
 
-// /type 文本输入接口
+// TypeHandler 文本输入处理
 func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	clientIP := r.RemoteAddr
-
-	log.Printf("[TYPE] 开始处理文本输入请求 - 客户端: %s", clientIP)
-
-	if !k.tryLock() {
-		latency := time.Since(startTime)
-		k.updateStats(false, latency, true)
-		log.Printf("[TYPE] 请求被拒绝 - 客户端: %s, 原因: 有其他请求正在执行, 延迟: %v", clientIP, latency)
-		http.Error(w, "有其他请求正在执行，请稍后重试", http.StatusTooManyRequests)
-		return
-	}
-	defer k.globalLock.Unlock()
-
-	k.setProcessing(true)
-	defer k.setProcessing(false)
 
 	var req TypeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		latency := time.Since(startTime)
 		k.updateStats(false, latency, false)
-		log.Printf("[TYPE] JSON解析失败 - 客户端: %s, 错误: %v, 延迟: %v", clientIP, err, latency)
 		http.Error(w, "JSON 解析失败", 400)
 		return
 	}
@@ -265,59 +364,83 @@ func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Text == "" {
 		latency := time.Since(startTime)
 		k.updateStats(false, latency, false)
-		log.Printf("[TYPE] 请求失败 - 客户端: %s, 原因: 文本内容为空, 延迟: %v", clientIP, latency)
 		http.Error(w, "文本内容不能为空", 400)
 		return
 	}
 
-	log.Printf("[TYPE] 开始输入文本 - 客户端: %s, 文本长度: %d, 内容: %q", clientIP, len(req.Text), req.Text)
+	// 将文本转换为按键序列
+	var keyRequests []KeyRequest
+	for _, char := range req.Text {
+		key := strings.ToLower(string(char))
+		if k.driver.IsKeySupported(key) {
+			keyRequests = append(keyRequests, KeyRequest{
+				Key:      key,
+				Duration: 50 * time.Millisecond,
+				ClientIP: clientIP,
+				Response: make(chan KeyResponse, 1),
+			})
+		}
+	}
 
-	typeStart := time.Now()
-	err := k.driver.Type(req.Text)
-	typeLatency := time.Since(typeStart)
-	totalLatency := time.Since(startTime)
-
-	if err != nil {
-		k.updateStats(false, totalLatency, false)
-		log.Printf("[TYPE] 文本输入失败 - 客户端: %s, 文本: %q, 错误: %v, 输入延迟: %v, 总延迟: %v", clientIP, req.Text, err, typeLatency, totalLatency)
-		http.Error(w, err.Error(), 500)
+	// 检查队列容量
+	if len(k.requestChan)+len(keyRequests) > cap(k.requestChan) {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, true)
+		http.Error(w, "文本过长，服务器繁忙", http.StatusTooManyRequests)
 		return
 	}
 
-	k.updateStats(true, totalLatency, false)
-	log.Printf("[TYPE] 文本输入成功 - 客户端: %s, 文本: %q, 输入延迟: %v, 总延迟: %v", clientIP, req.Text, typeLatency, totalLatency)
+	// 批量提交
+	for _, keyReq := range keyRequests {
+		k.requestChan <- keyReq
+	}
 
-	io.WriteString(w, "ok")
+	io.WriteString(w, "queued")
+	log.Printf("[TYPE] 文本输入已入队 - 客户端: %s, 字符数: %d", clientIP, len(keyRequests))
 }
 
 // StatsHandler 统计信息接口
 func (k *Keyboard) StatsHandler(w http.ResponseWriter, r *http.Request) {
 	stats := k.GetStats()
 
+	// 计算成功率，避免除零错误
+	var successRate float64
+	if stats.TotalRequests > 0 {
+		successRate = float64(stats.SuccessRequests) / float64(stats.TotalRequests) * 100
+	}
+
+	// 格式化最后请求时间
+	var lastRequestTime string
+	if !stats.LastRequestTime.IsZero() {
+		lastRequestTime = stats.LastRequestTime.Format(time.RFC3339)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"total_requests":       stats.TotalRequests,
 		"success_requests":     stats.SuccessRequests,
 		"failed_requests":      stats.FailedRequests,
 		"rejected_requests":    stats.RejectedRequests,
 		"average_latency_ms":   stats.AverageLatency.Milliseconds(),
-		"last_request_time":    stats.LastRequestTime.Format(time.RFC3339),
+		"last_request_time":    lastRequestTime,
 		"currently_processing": stats.CurrentlyProcessing,
-		"success_rate":         float64(stats.SuccessRequests) / float64(stats.TotalRequests) * 100,
+		"success_rate":         successRate,
+		"queue_length":         len(k.requestChan),
+		"queue_capacity":       cap(k.requestChan),
 	})
+
+	if err != nil {
+		log.Printf("[STATS] JSON编码失败: %v", err)
+		http.Error(w, "统计信息编码失败", 500)
+		return
+	}
 }
 
-// 非阻塞尝试加锁
-func (k *Keyboard) tryLock() bool {
-	locked := make(chan struct{}, 1)
-	go func() {
-		k.globalLock.Lock()
-		locked <- struct{}{}
-	}()
-	select {
-	case <-locked:
-		return true
-	case <-time.After(10 * time.Millisecond):
-		return false
-	}
+// Close 关闭键盘服务
+func (k *Keyboard) Close() error {
+	log.Printf("[KEYBOARD] 关闭键盘服务")
+	k.cancel()
+	k.wg.Wait()
+	close(k.requestChan)
+	return k.driver.Close()
 }

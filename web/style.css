@@ -108,7 +108,14 @@ main {
     color: #dc3545;
 }
 
-.refresh-btn {
+.control-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+.refresh-btn, .debug-btn {
     background: #17a2b8;
     color: white;
     border: none;
@@ -117,10 +124,24 @@ main {
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
+    flex: 1;
+    max-width: 120px;
 }
 
-.refresh-btn:hover {
+.refresh-btn:hover, .debug-btn:hover {
     background: #138496;
+}
+
+.debug-btn {
+    background: #6c757d;
+}
+
+.debug-btn:hover {
+    background: #5a6268;
+}
+
+.debug-btn.active {
+    background: #28a745;
 }
 
 /* 文本输入区域 */
