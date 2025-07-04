@@ -28,10 +28,11 @@ var keyMap = map[string]byte{
 
 // KeyRequest 按键请求
 type KeyRequest struct {
-	Key      string
-	Duration time.Duration
-	ClientIP string
-	Response chan KeyResponse
+	Key         string
+	Duration    time.Duration
+	ClientIP    string
+	Response    chan KeyResponse
+	RequestTime time.Time // 请求创建时间
 }
 
 // KeyResponse 按键响应
@@ -73,6 +74,21 @@ type KeyboardStats struct {
 	CurrentlyProcessing int64 // 使用原子操作
 	latencySum          time.Duration
 	latencyCount        int64
+
+	// 分阶段延迟统计
+	QueueLatency   time.Duration   // 队列等待时间
+	ProcessLatency time.Duration   // 实际处理时间
+	NetworkLatency time.Duration   // 网络传输时间
+	LatencyHistory []LatencyRecord // 最近的延迟记录
+}
+
+// LatencyRecord 延迟记录
+type LatencyRecord struct {
+	Timestamp      time.Time     `json:"timestamp"`
+	TotalLatency   time.Duration `json:"total_latency"`
+	QueueLatency   time.Duration `json:"queue_latency"`
+	ProcessLatency time.Duration `json:"process_latency"`
+	NetworkLatency time.Duration `json:"network_latency"`
 }
 
 func NewKeyboard(driver KeyboardDriver) *Keyboard {
@@ -111,22 +127,30 @@ func (k *Keyboard) processRequests() {
 
 // handleSingleRequest 处理单个按键请求
 func (k *Keyboard) handleSingleRequest(req KeyRequest) {
-	startTime := time.Now()
+	processStartTime := time.Now()
 	atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
 	defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
 
+	// 计算队列等待时间
+	queueLatency := processStartTime.Sub(req.RequestTime)
+
 	// 执行按键操作
+	driverStartTime := time.Now()
 	err := k.driver.Press(req.Key, req.Duration)
-	latency := time.Since(startTime)
+	processLatency := time.Since(driverStartTime)
+
+	// 计算总延迟
+	totalLatency := time.Since(req.RequestTime)
+	networkLatency := totalLatency - queueLatency - processLatency
 
 	// 更新统计信息
-	k.updateStats(err == nil, latency, false)
+	k.updateStatsWithDetails(err == nil, totalLatency, queueLatency, processLatency, networkLatency, false)
 
 	// 发送响应
 	response := KeyResponse{
 		Success: err == nil,
 		Error:   err,
-		Latency: latency,
+		Latency: totalLatency,
 	}
 
 	select {
@@ -136,9 +160,11 @@ func (k *Keyboard) handleSingleRequest(req KeyRequest) {
 	}
 
 	if err != nil {
-		log.Printf("[KEYBOARD] 按键失败: %s (%v) - %s | %v", req.Key, err, req.ClientIP, latency)
+		log.Printf("[KEYBOARD] 按键失败: %s (%v) - %s | 总延迟:%v 队列:%v 处理:%v",
+			req.Key, err, req.ClientIP, totalLatency, queueLatency, processLatency)
 	} else {
-		log.Printf("[KEYBOARD] 按键成功: %s - %s | %v", req.Key, req.ClientIP, latency)
+		log.Printf("[KEYBOARD] 按键成功: %s - %s | 总延迟:%v 队列:%v 处理:%v",
+			req.Key, req.ClientIP, totalLatency, queueLatency, processLatency)
 	}
 }
 
@@ -146,6 +172,11 @@ func (k *Keyboard) handleSingleRequest(req KeyRequest) {
 func (k *Keyboard) GetStats() *KeyboardStats {
 	k.stats.mu.RLock()
 	defer k.stats.mu.RUnlock()
+
+	// 复制延迟历史
+	historyLen := len(k.stats.LatencyHistory)
+	latencyHistory := make([]LatencyRecord, historyLen)
+	copy(latencyHistory, k.stats.LatencyHistory)
 
 	return &KeyboardStats{
 		TotalRequests:       k.stats.TotalRequests,
@@ -157,11 +188,22 @@ func (k *Keyboard) GetStats() *KeyboardStats {
 		CurrentlyProcessing: atomic.LoadInt64(&k.stats.CurrentlyProcessing),
 		latencySum:          k.stats.latencySum,
 		latencyCount:        k.stats.latencyCount,
+
+		// 分阶段延迟统计
+		QueueLatency:   k.stats.QueueLatency,
+		ProcessLatency: k.stats.ProcessLatency,
+		NetworkLatency: k.stats.NetworkLatency,
+		LatencyHistory: latencyHistory,
 	}
 }
 
 // updateStats 更新统计信息
 func (k *Keyboard) updateStats(success bool, latency time.Duration, rejected bool) {
+	k.updateStatsWithDetails(success, latency, 0, latency, 0, rejected)
+}
+
+// updateStatsWithDetails 更新详细统计信息
+func (k *Keyboard) updateStatsWithDetails(success bool, totalLatency, queueLatency, processLatency, networkLatency time.Duration, rejected bool) {
 	k.stats.mu.Lock()
 	defer k.stats.mu.Unlock()
 
@@ -180,9 +222,34 @@ func (k *Keyboard) updateStats(success bool, latency time.Duration, rejected boo
 	}
 
 	// 更新平均延迟
-	k.stats.latencySum += latency
+	k.stats.latencySum += totalLatency
 	k.stats.latencyCount++
 	k.stats.AverageLatency = k.stats.latencySum / time.Duration(k.stats.latencyCount)
+
+	// 更新分阶段延迟（简单平均）
+	if k.stats.latencyCount == 1 {
+		k.stats.QueueLatency = queueLatency
+		k.stats.ProcessLatency = processLatency
+		k.stats.NetworkLatency = networkLatency
+	} else {
+		k.stats.QueueLatency = (k.stats.QueueLatency + queueLatency) / 2
+		k.stats.ProcessLatency = (k.stats.ProcessLatency + processLatency) / 2
+		k.stats.NetworkLatency = (k.stats.NetworkLatency + networkLatency) / 2
+	}
+
+	// 添加到历史记录（保持最近50条记录）
+	record := LatencyRecord{
+		Timestamp:      time.Now(),
+		TotalLatency:   totalLatency,
+		QueueLatency:   queueLatency,
+		ProcessLatency: processLatency,
+		NetworkLatency: networkLatency,
+	}
+
+	k.stats.LatencyHistory = append(k.stats.LatencyHistory, record)
+	if len(k.stats.LatencyHistory) > 50 {
+		k.stats.LatencyHistory = k.stats.LatencyHistory[1:]
+	}
 }
 
 // PressHandler 按键处理接口（异步）
@@ -219,10 +286,11 @@ func (k *Keyboard) PressHandler(w http.ResponseWriter, r *http.Request) {
 	// 检查队列是否满
 	select {
 	case k.requestChan <- KeyRequest{
-		Key:      key,
-		Duration: duration,
-		ClientIP: clientIP,
-		Response: make(chan KeyResponse, 1),
+		Key:         key,
+		Duration:    duration,
+		ClientIP:    clientIP,
+		Response:    make(chan KeyResponse, 1),
+		RequestTime: time.Now(),
 	}:
 		// 请求已加入队列，立即返回成功
 		io.WriteString(w, "queued")
@@ -273,10 +341,11 @@ func (k *Keyboard) PressHandlerSync(w http.ResponseWriter, r *http.Request) {
 	// 发送请求
 	select {
 	case k.requestChan <- KeyRequest{
-		Key:      key,
-		Duration: duration,
-		ClientIP: clientIP,
-		Response: responseChan,
+		Key:         key,
+		Duration:    duration,
+		ClientIP:    clientIP,
+		Response:    responseChan,
+		RequestTime: time.Now(),
 	}:
 		// 等待响应
 		select {
@@ -287,7 +356,7 @@ func (k *Keyboard) PressHandlerSync(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, response.Error.Error(), 500)
 			}
 		case <-time.After(10 * time.Second):
-			http.Error(w, "请求超时", 504)
+			http.Error(w, "请求超时", http.StatusGatewayTimeout)
 		}
 
 	default:
@@ -338,10 +407,11 @@ func (k *Keyboard) ActionsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		k.requestChan <- KeyRequest{
-			Key:      key,
-			Duration: duration,
-			ClientIP: clientIP,
-			Response: make(chan KeyResponse, 1),
+			Key:         key,
+			Duration:    duration,
+			ClientIP:    clientIP,
+			Response:    make(chan KeyResponse, 1),
+			RequestTime: time.Now(),
 		}
 	}
 
@@ -375,10 +445,11 @@ func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 		key := strings.ToLower(string(char))
 		if k.driver.IsKeySupported(key) {
 			keyRequests = append(keyRequests, KeyRequest{
-				Key:      key,
-				Duration: 50 * time.Millisecond,
-				ClientIP: clientIP,
-				Response: make(chan KeyResponse, 1),
+				Key:         key,
+				Duration:    50 * time.Millisecond,
+				ClientIP:    clientIP,
+				Response:    make(chan KeyResponse, 1),
+				RequestTime: time.Now(),
 			})
 		}
 	}
@@ -428,6 +499,14 @@ func (k *Keyboard) StatsHandler(w http.ResponseWriter, r *http.Request) {
 		"success_rate":         successRate,
 		"queue_length":         len(k.requestChan),
 		"queue_capacity":       cap(k.requestChan),
+
+		// 分阶段延迟统计
+		"latency_breakdown": map[string]interface{}{
+			"queue_ms":   stats.QueueLatency.Milliseconds(),
+			"process_ms": stats.ProcessLatency.Milliseconds(),
+			"network_ms": stats.NetworkLatency.Milliseconds(),
+		},
+		"latency_history": stats.LatencyHistory,
 	})
 
 	if err != nil {

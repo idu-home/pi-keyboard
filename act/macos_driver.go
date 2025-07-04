@@ -109,10 +109,12 @@ func (d *MacOSDriver) keyUp(key string) error {
 func (d *MacOSDriver) pressAppleScript(key string) error {
 	// 策略1: 尝试使用 cliclick（更快）
 	if err := d.pressWithCliclick(key); err == nil {
+		log.Printf("[MACOS] 使用驱动: cliclick - 按键: %s", key)
 		return nil
 	}
 
 	// 策略2: 回退到 AppleScript
+	log.Printf("[MACOS] 使用驱动: AppleScript - 按键: %s", key)
 	return d.pressWithAppleScript(key)
 }
 
@@ -134,7 +136,7 @@ func (d *MacOSDriver) pressWithCliclick(key string) error {
 
 	err := cmd.Run()
 	if err != nil {
-		log.Printf("[MACOS] cliclick 执行失败 - 按键: %s, 错误: %v", key, err)
+		log.Printf("[MACOS] cliclick 执行失败 - 按键: %s, 错误: %v, 回退到AppleScript", key, err)
 		return fmt.Errorf("cliclick 执行失败: %v", err)
 	}
 

@@ -12,8 +12,16 @@ class PiKeyboard {
             totalRequests: document.getElementById('totalRequests'),
             successRate: document.getElementById('successRate'),
             avgLatency: document.getElementById('avgLatency'),
-            processingStatus: document.getElementById('processingStatus')
+            processingStatus: document.getElementById('processingStatus'),
+            // 延迟分析元素
+            queueLatency: document.getElementById('queueLatency'),
+            processLatency: document.getElementById('processLatency'),
+            networkLatency: document.getElementById('networkLatency')
         };
+        
+        // 延迟图表
+        this.latencyChart = null;
+        this.latencyHistory = [];
         
         this.apiBase = window.location.origin;
         this.statsInterval = null;
@@ -281,6 +289,18 @@ class PiKeyboard {
         this.statsElements.processingStatus.textContent = processing ? '处理中' : '空闲';
         this.statsElements.processingStatus.className = 'stat-value ' + 
             (processing ? 'warning' : 'success');
+        
+        // 更新延迟分析
+        if (stats.latency_breakdown) {
+            this.statsElements.queueLatency.textContent = `${stats.latency_breakdown.queue_ms || 0}ms`;
+            this.statsElements.processLatency.textContent = `${stats.latency_breakdown.process_ms || 0}ms`;
+            this.statsElements.networkLatency.textContent = `${stats.latency_breakdown.network_ms || 0}ms`;
+        }
+        
+        // 更新延迟历史图表
+        if (stats.latency_history) {
+            this.updateLatencyChart(stats.latency_history);
+        }
     }
     
     async handleKeyPress(keyElement) {
@@ -512,6 +532,118 @@ class PiKeyboard {
             spinner.className = 'loading-spinner';
             this.statusElement.insertBefore(spinner, this.statusElement.firstChild);
         }
+    }
+    
+    // 更新延迟图表
+    updateLatencyChart(latencyHistory) {
+        const canvas = document.getElementById('latencyChart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // 清空画布
+        ctx.clearRect(0, 0, width, height);
+        
+        if (!latencyHistory || latencyHistory.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('暂无数据', width / 2, height / 2);
+            return;
+        }
+        
+        // 设置边距
+        const margin = { top: 20, right: 20, bottom: 30, left: 50 };
+        const chartWidth = width - margin.left - margin.right;
+        const chartHeight = height - margin.top - margin.bottom;
+        
+        // 获取最大延迟值用于缩放
+        const maxLatency = Math.max(...latencyHistory.map(record => 
+            (record.total_latency || 0) / 1000000 // 转换为毫秒
+        ));
+        
+        if (maxLatency === 0) return;
+        
+        // 绘制背景网格
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        
+        // 水平网格线
+        for (let i = 0; i <= 5; i++) {
+            const y = margin.top + (chartHeight / 5) * i;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, y);
+            ctx.lineTo(margin.left + chartWidth, y);
+            ctx.stroke();
+        }
+        
+        // 绘制面积图
+        if (latencyHistory.length > 1) {
+            const xStep = chartWidth / (latencyHistory.length - 1);
+            
+            // 绘制叠加面积图
+            const colors = [
+                'rgba(255, 99, 132, 0.6)',  // 网络延迟 - 红色
+                'rgba(54, 162, 235, 0.6)',  // 处理延迟 - 蓝色
+                'rgba(255, 206, 86, 0.6)'   // 队列延迟 - 黄色
+            ];
+            
+            const layers = ['network_latency', 'process_latency', 'queue_latency'];
+            
+            layers.forEach((layer, layerIndex) => {
+                ctx.fillStyle = colors[layerIndex];
+                ctx.beginPath();
+                ctx.moveTo(margin.left, margin.top + chartHeight);
+                
+                // 计算累积值
+                latencyHistory.forEach((record, i) => {
+                    const x = margin.left + xStep * i;
+                    
+                    let cumulativeValue = 0;
+                    for (let j = layerIndex; j < layers.length; j++) {
+                        const layerValue = (record[layers[j]] || 0) / 1000000; // 转换为毫秒
+                        cumulativeValue += layerValue;
+                    }
+                    
+                    const y = margin.top + chartHeight - (cumulativeValue / maxLatency) * chartHeight;
+                    ctx.lineTo(x, Math.max(margin.top, y));
+                });
+                
+                ctx.lineTo(margin.left + chartWidth, margin.top + chartHeight);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+        
+        // 绘制坐标轴
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        
+        // Y轴
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left, margin.top + chartHeight);
+        ctx.stroke();
+        
+        // X轴
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top + chartHeight);
+        ctx.lineTo(margin.left + chartWidth, margin.top + chartHeight);
+        ctx.stroke();
+        
+        // 绘制Y轴标签
+        ctx.fillStyle = '#666';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        for (let i = 0; i <= 5; i++) {
+            const value = (maxLatency / 5) * (5 - i);
+            const y = margin.top + (chartHeight / 5) * i;
+            ctx.fillText(`${value.toFixed(1)}ms`, margin.left - 5, y + 4);
+        }
+        
+
     }
     
     // 页面卸载时清理资源

@@ -144,6 +144,135 @@ main {
     background: #28a745;
 }
 
+/* 延迟分析样式 */
+.latency-analysis {
+    margin: 20px 0;
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+}
+
+.latency-analysis h4 {
+    margin: 0 0 15px 0;
+    font-size: 1.1em;
+    text-align: center;
+    color: #333;
+}
+
+.latency-analysis h5 {
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    color: #333;
+}
+
+/* 图例样式 */
+.latency-legend {
+    flex-shrink: 0;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    min-width: 140px;
+    align-self: flex-start;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.legend-item:last-child {
+    margin-bottom: 0;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    border: 1px solid #ddd;
+}
+
+.queue-color {
+    background-color: rgba(255, 206, 84, 0.8);
+}
+
+.process-color {
+    background-color: rgba(54, 162, 235, 0.8);
+}
+
+.network-color {
+    background-color: rgba(255, 99, 132, 0.8);
+}
+
+.legend-text {
+    font-size: 13px;
+    color: #333;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.latency-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.latency-item {
+    background: white;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.latency-label {
+    display: block;
+    font-size: 0.85em;
+    margin-bottom: 5px;
+    color: #666;
+}
+
+.latency-value {
+    display: block;
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #333;
+}
+
+.latency-chart-container {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.chart-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    justify-content: center;
+}
+
+.chart-description {
+    margin-top: 10px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+#latencyChart {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
 /* 文本输入区域 */
 .text-input-section {
     background: white;
