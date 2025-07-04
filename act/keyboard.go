@@ -115,9 +115,6 @@ func (k *Keyboard) handleSingleRequest(req KeyRequest) {
 	atomic.AddInt64(&k.stats.CurrentlyProcessing, 1)
 	defer atomic.AddInt64(&k.stats.CurrentlyProcessing, -1)
 
-	log.Printf("[KEYBOARD] 处理按键请求 - 客户端: %s, 按键: %s, 持续时间: %v",
-		req.ClientIP, req.Key, req.Duration)
-
 	// 执行按键操作
 	err := k.driver.Press(req.Key, req.Duration)
 	latency := time.Since(startTime)
@@ -135,15 +132,13 @@ func (k *Keyboard) handleSingleRequest(req KeyRequest) {
 	select {
 	case req.Response <- response:
 	case <-time.After(1 * time.Second):
-		log.Printf("[KEYBOARD] 响应超时 - 客户端: %s, 按键: %s", req.ClientIP, req.Key)
+		log.Printf("[KEYBOARD] 响应超时: %s - %s", req.Key, req.ClientIP)
 	}
 
 	if err != nil {
-		log.Printf("[KEYBOARD] 按键执行失败 - 客户端: %s, 按键: %s, 错误: %v, 延迟: %v",
-			req.ClientIP, req.Key, err, latency)
+		log.Printf("[KEYBOARD] 按键失败: %s (%v) - %s | %v", req.Key, err, req.ClientIP, latency)
 	} else {
-		log.Printf("[KEYBOARD] 按键执行成功 - 客户端: %s, 按键: %s, 延迟: %v",
-			req.ClientIP, req.Key, latency)
+		log.Printf("[KEYBOARD] 按键成功: %s - %s | %v", req.Key, req.ClientIP, latency)
 	}
 }
 
@@ -231,14 +226,12 @@ func (k *Keyboard) PressHandler(w http.ResponseWriter, r *http.Request) {
 	}:
 		// 请求已加入队列，立即返回成功
 		io.WriteString(w, "queued")
-		log.Printf("[PRESS] 请求已入队 - 客户端: %s, 按键: %s, 队列延迟: %v",
-			clientIP, key, time.Since(startTime))
 
 	default:
 		// 队列已满，拒绝请求
 		latency := time.Since(startTime)
 		k.updateStats(false, latency, true)
-		log.Printf("[PRESS] 队列已满，请求被拒绝 - 客户端: %s, 按键: %s", clientIP, key)
+		log.Printf("[PRESS] 队列满，拒绝请求: %s - %s", key, clientIP)
 		http.Error(w, "服务器繁忙，请稍后重试", http.StatusTooManyRequests)
 	}
 }
@@ -353,7 +346,7 @@ func (k *Keyboard) ActionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	io.WriteString(w, "queued")
-	log.Printf("[ACTIONS] 批量操作已入队 - 客户端: %s, 操作数: %d", clientIP, len(actions))
+	log.Printf("[ACTIONS] 批量操作入队: %d个操作 - %s", len(actions), clientIP)
 }
 
 // TypeHandler 文本输入处理
