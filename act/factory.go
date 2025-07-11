@@ -46,7 +46,7 @@ func (f *DriverFactory) createAutoDetectedDriver(config *DriverConfig) (Keyboard
 		return NewMacOSDriver(), nil
 
 	case "windows":
-		return nil, fmt.Errorf("windows 平台暂未实现，请使用 linux 或 mac OS")
+		return NewWindowsDriver(), nil
 
 	default:
 		return nil, fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
@@ -63,7 +63,7 @@ func (f *DriverFactory) createSpecificDriver(driverType string, config *DriverCo
 		return NewMacOSDriver(), nil
 
 	case DriverTypeWindows:
-		return nil, fmt.Errorf("windows 驱动暂未实现")
+		return NewWindowsDriver(), nil
 
 	default:
 		return nil, fmt.Errorf("未知的驱动类型: %s", driverType)
