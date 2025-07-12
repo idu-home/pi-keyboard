@@ -57,6 +57,30 @@ func (d *LinuxOTGDriver) Press(key string, duration time.Duration) error {
 	return d.sendHIDReport()
 }
 
+// KeyDown 按下按键（不释放）
+func (d *LinuxOTGDriver) KeyDown(key string) error {
+	key = strings.ToLower(key)
+	if !d.IsKeySupported(key) {
+		return fmt.Errorf("不支持的按键: %s", key)
+	}
+	d.mu.Lock()
+	d.pressedKey = key
+	d.mu.Unlock()
+	return d.sendHIDReport()
+}
+
+// KeyUp 释放按键
+func (d *LinuxOTGDriver) KeyUp(key string) error {
+	key = strings.ToLower(key)
+	if !d.IsKeySupported(key) {
+		return fmt.Errorf("不支持的按键: %s", key)
+	}
+	d.mu.Lock()
+	d.pressedKey = ""
+	d.mu.Unlock()
+	return d.sendHIDReport()
+}
+
 // Type 输入字符串
 func (d *LinuxOTGDriver) Type(text string) error {
 	for _, char := range text {

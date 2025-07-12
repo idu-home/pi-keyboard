@@ -142,6 +142,30 @@ func (d *WindowsDriver) Press(key string, duration time.Duration) error {
 	return d.pressWithDuration(key, duration)
 }
 
+// KeyDown 按下按键（不释放）
+func (d *WindowsDriver) KeyDown(key string) error {
+	if !d.IsKeySupported(key) {
+		return fmt.Errorf("不支持的按键: %s", key)
+	}
+	vk := d.getVKCode(key)
+	if vk == "" {
+		return fmt.Errorf("不支持的按键: %s", key)
+	}
+	return d.sender.KeyDown(vk)
+}
+
+// KeyUp 释放按键
+func (d *WindowsDriver) KeyUp(key string) error {
+	if !d.IsKeySupported(key) {
+		return fmt.Errorf("不支持的按键: %s", key)
+	}
+	vk := d.getVKCode(key)
+	if vk == "" {
+		return fmt.Errorf("不支持的按键: %s", key)
+	}
+	return d.sender.KeyUp(vk)
+}
+
 // pressWithDuration 按下-等待-释放
 func (d *WindowsDriver) pressWithDuration(key string, duration time.Duration) error {
 	if err := d.keyDown(key); err != nil {

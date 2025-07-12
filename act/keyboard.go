@@ -432,6 +432,66 @@ func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[TYPE] 文本输入并发处理 - 客户端: %s, 字符数: %d", clientIP, len(req.Text))
 }
 
+// KeyDownHandler 按键按下接口
+func (k *Keyboard) KeyDownHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	key := strings.ToLower(r.URL.Query().Get("key"))
+	clientIP := r.RemoteAddr
+
+	if key == "" {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "按键参数不能为空", 400)
+		return
+	}
+
+	if !k.driver.IsKeySupported(key) {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "不支持的按键: "+key, 400)
+		return
+	}
+
+	err := k.driver.KeyDown(key)
+	latency := time.Since(startTime)
+	k.updateStats(err == nil, latency, false)
+	if err != nil {
+		http.Error(w, "按键按下失败: "+err.Error(), 500)
+		return
+	}
+	io.WriteString(w, "ok")
+}
+
+// KeyUpHandler 按键释放接口
+func (k *Keyboard) KeyUpHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	key := strings.ToLower(r.URL.Query().Get("key"))
+	clientIP := r.RemoteAddr
+
+	if key == "" {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "按键参数不能为空", 400)
+		return
+	}
+
+	if !k.driver.IsKeySupported(key) {
+		latency := time.Since(startTime)
+		k.updateStats(false, latency, false)
+		http.Error(w, "不支持的按键: "+key, 400)
+		return
+	}
+
+	err := k.driver.KeyUp(key)
+	latency := time.Since(startTime)
+	k.updateStats(err == nil, latency, false)
+	if err != nil {
+		http.Error(w, "按键释放失败: "+err.Error(), 500)
+		return
+	}
+	io.WriteString(w, "ok")
+}
+
 // StatsHandler 统计信息接口
 func (k *Keyboard) StatsHandler(w http.ResponseWriter, r *http.Request) {
 	stats := k.GetStats()

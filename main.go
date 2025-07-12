@@ -110,6 +110,10 @@ func main() {
 	http.Handle("/actions", httpLogger.Middleware(http.HandlerFunc(keyboard.ActionsHandler)))
 	http.Handle("/type", httpLogger.Middleware(http.HandlerFunc(keyboard.TypeHandler)))
 
+	// 新增 keydown/keyup 接口
+	http.Handle("/keydown", httpLogger.Middleware(http.HandlerFunc(keyboard.KeyDownHandler)))
+	http.Handle("/keyup", httpLogger.Middleware(http.HandlerFunc(keyboard.KeyUpHandler)))
+
 	// 统计接口 - 不记录日志（避免过多日志）
 	http.HandleFunc("/stats", keyboard.StatsHandler)
 

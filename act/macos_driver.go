@@ -51,6 +51,16 @@ func (d *MacOSDriver) Press(key string, duration time.Duration) error {
 	return d.pressWithDuration(key, duration)
 }
 
+// KeyDown 按下按键（不释放）
+func (d *MacOSDriver) KeyDown(key string) error {
+	return d.keyDown(key)
+}
+
+// KeyUp 释放按键
+func (d *MacOSDriver) KeyUp(key string) error {
+	return d.keyUp(key)
+}
+
 // pressWithDuration 实现真正的按下-等待-释放逻辑
 func (d *MacOSDriver) pressWithDuration(key string, duration time.Duration) error {
 	// 步骤1: 按下按键

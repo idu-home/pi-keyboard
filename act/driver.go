@@ -7,6 +7,12 @@ type KeyboardDriver interface {
 	// Press 按下并释放按键，持续指定时间（原子操作，安全）
 	Press(key string, duration time.Duration) error
 
+	// KeyDown 按下按键（不释放）
+	KeyDown(key string) error
+
+	// KeyUp 释放按键
+	KeyUp(key string) error
+
 	// Type 输入字符串
 	Type(text string) error
 
