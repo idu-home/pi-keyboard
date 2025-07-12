@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # 0. 复制脚本
 # /usr/local/bin/setup_pi_keyboard_gadget.sh
 
