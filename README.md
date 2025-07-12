@@ -33,6 +33,16 @@ go build -o pi-keyboard .
 GET /press?key=a&duration=50
 ```
 
+### 按键按下
+```http
+GET /keydown?key=a
+```
+
+### 按键抬起
+```http
+GET /keyup?key=a
+```
+
 ### 批量操作
 ```http
 POST /actions
