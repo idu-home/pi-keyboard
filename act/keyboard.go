@@ -436,7 +436,6 @@ func (k *Keyboard) TypeHandler(w http.ResponseWriter, r *http.Request) {
 func (k *Keyboard) KeyDownHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	key := strings.ToLower(r.URL.Query().Get("key"))
-	clientIP := r.RemoteAddr
 
 	if key == "" {
 		latency := time.Since(startTime)
@@ -466,7 +465,6 @@ func (k *Keyboard) KeyDownHandler(w http.ResponseWriter, r *http.Request) {
 func (k *Keyboard) KeyUpHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	key := strings.ToLower(r.URL.Query().Get("key"))
-	clientIP := r.RemoteAddr
 
 	if key == "" {
 		latency := time.Since(startTime)
