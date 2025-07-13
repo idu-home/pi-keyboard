@@ -235,6 +235,72 @@ class PiKeyboard {
         
         this.updateStatus('就绪 - 并发处理模式 (双击屏幕或长按此处显示调试日志)', 'success');
         this.log('✅ 初始化完成');
+
+        // ========== 新增：本地物理键盘监听 ==========
+        this.pressedKeys = new Set();
+        window.addEventListener('keydown', (e) => {
+            const key = this.mapKey(e);
+            if (!key) return;
+            if (!this.pressedKeys.has(key)) {
+                this.pressedKeys.add(key);
+                this.setKeyPressed(key, true);
+                this.sendKeyDown(key); // 新增：发送 keydown
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = this.mapKey(e);
+            if (!key) return;
+            if (this.pressedKeys.has(key)) {
+                this.pressedKeys.delete(key);
+                this.setKeyPressed(key, false);
+                this.sendKeyUp(key); // 新增：发送 keyup
+            }
+        });
+    }
+
+    // 新增：发送 keydown 请求
+    async sendKeyDown(key) {
+        const url = `${this.apiBase}/keydown?key=${encodeURIComponent(key)}`;
+        this.log(`⬇️ 发送 keydown: ${key}`);
+        try {
+            await fetch(url, { method: 'GET' });
+        } catch (err) {
+            this.log(`❌ keydown 发送失败: ${err.message}`, 'error');
+        }
+    }
+
+    // 新增：发送 keyup 请求
+    async sendKeyUp(key) {
+        const url = `${this.apiBase}/keyup?key=${encodeURIComponent(key)}`;
+        this.log(`⬆️ 发送 keyup: ${key}`);
+        try {
+            await fetch(url, { method: 'GET' });
+        } catch (err) {
+            this.log(`❌ keyup 发送失败: ${err.message}`, 'error');
+        }
+    }
+
+    // 键盘事件到 data-key 的映射
+    mapKey(e) {
+        if (e.key === ' ') return 'space';
+        if (e.key === 'Enter') return 'enter';
+        if (e.key === 'Backspace') return 'backspace';
+        if (e.key === 'Tab') return 'tab';
+        if (e.key === 'ArrowUp') return 'up';
+        if (e.key === 'ArrowDown') return 'down';
+        if (e.key === 'ArrowLeft') return 'left';
+        if (e.key === 'ArrowRight') return 'right';
+        // 只处理单字符和 a-z0-9
+        if (/^[a-zA-Z0-9]$/.test(e.key)) return e.key.toLowerCase();
+        return null;
+    }
+
+    // 设置虚拟键盘按钮高亮/恢复
+    setKeyPressed(key, pressed) {
+        const btn = document.querySelector(`.key[data-key="${key}"]`);
+        if (btn) {
+            btn.classList.toggle('pressed', pressed);
+        }
     }
     
     // 开始自动刷新统计信息
