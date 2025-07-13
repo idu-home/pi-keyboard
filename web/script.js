@@ -241,10 +241,15 @@ class PiKeyboard {
         window.addEventListener('keydown', (e) => {
             const key = this.mapKey(e);
             if (!key) return;
+            // 阻止方向键、空格、Tab 的默认行为，防止页面滚动等
+            if (["up", "down", "left", "right", "space", "tab"].includes(key)) {
+                e.preventDefault();
+            }
             if (!this.pressedKeys.has(key)) {
                 this.pressedKeys.add(key);
                 this.setKeyPressed(key, true);
-                this.sendKeyDown(key); // 新增：发送 keydown
+                // 不用 await，fire-and-forget
+                this.sendKeyDown(key);
             }
         });
         window.addEventListener('keyup', (e) => {
@@ -253,7 +258,8 @@ class PiKeyboard {
             if (this.pressedKeys.has(key)) {
                 this.pressedKeys.delete(key);
                 this.setKeyPressed(key, false);
-                this.sendKeyUp(key); // 新增：发送 keyup
+                // 不用 await，fire-and-forget
+                this.sendKeyUp(key);
             }
         });
     }
