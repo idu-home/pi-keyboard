@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"pi-keyboard/act"
 	"pi-keyboard/logger"
 	"time"
@@ -117,6 +120,20 @@ func main() {
 	// 统计接口 - 不记录日志（避免过多日志）
 	http.HandleFunc("/stats", keyboard.StatsHandler)
 
+	// ========== 新增：主机名和git信息 ==========
+	hostname, _ := os.Hostname()
+	commitTime := getGitCommitTime()
+	commitMsg := getGitCommitMessage()
+
+	http.HandleFunc("/meta", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"hostname":    hostname,
+			"commit_time": commitTime,
+			"commit_msg":  commitMsg,
+		})
+	})
+
 	log.Printf("API 接口注册完成")
 
 	// 静态文件服务器
@@ -143,4 +160,29 @@ func main() {
 	log.Printf("pi-keyboard Web 服务已启动，监听 %s 端口...", *port)
 	log.Printf("访问 http://localhost:%s 使用键盘界面", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
+}
+
+// 获取git commit hash
+const defaultCommit = ""
+
+// 获取git commit时间
+func getGitCommitTime() string {
+	out, err := exec.Command("git", "log", "-1", "--format=%cd", "--date=iso").Output()
+	if err != nil {
+		return defaultCommit
+	}
+	return string(bytes.TrimSpace(out))
+}
+
+// 获取git commit message（只取前50个字符）
+func getGitCommitMessage() string {
+	out, err := exec.Command("git", "log", "-1", "--pretty=%B").Output()
+	if err != nil {
+		return ""
+	}
+	msg := string(bytes.TrimSpace(out))
+	if len(msg) > 50 {
+		return msg[:50] + "..."
+	}
+	return msg
 }

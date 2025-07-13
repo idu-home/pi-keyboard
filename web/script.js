@@ -735,6 +735,17 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('beforeunload', () => {
         keyboard.cleanup();
     });
+
+    // 新增：加载主机名和git信息
+    fetch('/meta').then(r => r.json()).then(meta => {
+        const bar = document.getElementById('meta-bar');
+        if (bar) {
+            bar.textContent = `Host: ${meta.hostname} | Commit: ${meta.commit_time} | ${meta.commit_msg}`;
+        }
+    }).catch(() => {
+        const bar = document.getElementById('meta-bar');
+        if (bar) bar.textContent = '主机/版本信息获取失败';
+    });
 });
 
 // 添加一些实用的键盘快捷键

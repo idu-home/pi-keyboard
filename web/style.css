@@ -442,6 +442,57 @@ main {
     color: #ffc107;
 }
 
+/* 顶部主机名和git信息栏 */
+.meta-bar {
+    background: #222;
+    color: #fff;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 0 0 10px 10px;
+    margin-bottom: 10px;
+    text-align: left;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    font-family: monospace;
+}
+
+/* 折叠面板样式 */
+details {
+    margin-bottom: 16px;
+    background: #f6f7fa;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    padding: 0 0 0 0;
+    border: 1px solid #e0e0e0;
+    transition: box-shadow 0.2s;
+}
+details[open] {
+    box-shadow: 0 4px 16px rgba(102,126,234,0.08);
+}
+details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1.05em;
+    padding: 12px 20px;
+    outline: none;
+    user-select: none;
+    color: #667eea;
+    background: #f0f3fa;
+    border-radius: 10px 10px 0 0;
+    transition: background 0.2s;
+}
+details[open] > summary {
+    background: #e9ecef;
+}
+details > summary::-webkit-details-marker {
+    display: none;
+}
+
+/* 让折叠内容有内边距 */
+details > *:not(summary) {
+    padding: 0 20px 16px 20px;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .container {

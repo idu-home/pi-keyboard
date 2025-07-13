@@ -8,6 +8,7 @@
 </head>
 <body>
     <div class="container">
+        <div id="meta-bar" class="meta-bar">加载中...</div>
         <header>
             <h1>Pi Keyboard</h1>
             <p>远程键盘控制</p>
@@ -36,10 +37,10 @@
                     </div>
                 </div>
                 
-                <!-- 延迟分析区域 -->
-                <div class="latency-analysis">
+                <details>
+                  <summary>延迟分析 (点击展开/收起)</summary>
+                  <div class="latency-analysis">
                     <h4>延迟分析 (并发处理模式)</h4>
-                    
                     <div class="latency-breakdown">
                         <div class="latency-item">
                             <span class="latency-label">实际处理</span>
@@ -50,13 +51,10 @@
                             <span class="latency-value" id="networkLatency">-</span>
                         </div>
                     </div>
-                    
-                    <!-- 延迟历史图表 -->
                     <div class="latency-chart-container">
                         <h5>延迟历史趋势图</h5>
                         <div class="chart-content">
                             <canvas id="latencyChart" width="600" height="200"></canvas>
-                            <!-- 图例说明 -->
                             <div class="latency-legend">
                                 <div class="legend-item">
                                     <div class="legend-color process-color"></div>
@@ -72,7 +70,8 @@
                             <small>并发处理模式：无队列等待，每个请求独立处理</small>
                         </div>
                     </div>
-                </div>
+                  </div>
+                </details>
                 
                 <div class="control-buttons">
                     <button id="refreshStats" class="refresh-btn">刷新统计</button>
@@ -80,14 +79,16 @@
                 </div>
             </section>
 
-            <!-- 文本输入区域 -->
-            <section class="text-input-section">
-                <h3>文本输入</h3>
-                <div class="input-group">
-                    <textarea id="textInput" placeholder="输入要发送的文本...&#10;支持 Ctrl+Enter 或 Cmd+Enter 快速发送"></textarea>
-                    <button id="sendText" class="send-btn">发送文本</button>
-                </div>
-            </section>
+            <details>
+              <summary>文本输入 (点击展开/收起)</summary>
+              <section class="text-input-section">
+                  <h3>文本输入</h3>
+                  <div class="input-group">
+                      <textarea id="textInput" placeholder="输入要发送的文本...&#10;支持 Ctrl+Enter 或 Cmd+Enter 快速发送"></textarea>
+                      <button id="sendText" class="send-btn">发送文本</button>
+                  </div>
+              </section>
+            </details>
 
             <!-- 虚拟键盘区域 -->
             <section class="keyboard-section">
