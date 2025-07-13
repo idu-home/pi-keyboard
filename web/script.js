@@ -248,7 +248,6 @@ class PiKeyboard {
             if (!this.pressedKeys.has(key)) {
                 this.pressedKeys.add(key);
                 this.setKeyPressed(key, true);
-                // 不用 await，fire-and-forget
                 this.sendKeyDown(key);
             }
         });
@@ -258,7 +257,6 @@ class PiKeyboard {
             if (this.pressedKeys.has(key)) {
                 this.pressedKeys.delete(key);
                 this.setKeyPressed(key, false);
-                // 不用 await，fire-and-forget
                 this.sendKeyUp(key);
             }
         });
