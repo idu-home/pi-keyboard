@@ -607,3 +607,26 @@ details > *:not(summary) {
 .key.animate {
     animation: keyPress 0.15s ease-in-out;
 }
+
+.record-btn {
+    background: #ff9800;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+    max-width: 140px;
+}
+.record-btn.recording {
+    background: #e53935;
+}
+.record-filename {
+    margin-left: 10px;
+    color: #666;
+    font-size: 13px;
+    align-self: center;
+    word-break: break-all;
+}

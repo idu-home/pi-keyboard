@@ -64,7 +64,9 @@ ehthumbs.db
 Thumbs.db
 
 # 日志文件
+log/
 *.log
+*.csv
 
 # 临时文件
 *.tmp

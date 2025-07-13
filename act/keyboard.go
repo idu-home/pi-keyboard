@@ -2,11 +2,13 @@ package act
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,7 +30,7 @@ var keyMap = map[string]byte{
 	"enter": 0x28, "esc": 0x29, "backspace": 0x2a, "tab": 0x2b, "space": 0x2c,
 	"-": 0x2d, "=": 0x2e, "[": 0x2f, "]": 0x30, "\\": 0x31,
 	"nonus#": 0x32, // 非美式#和~，部分键盘
-	";": 0x33, "'": 0x34, "`": 0x35, ",": 0x36, ".": 0x37, "/": 0x38,
+	";":      0x33, "'": 0x34, "`": 0x35, ",": 0x36, ".": 0x37, "/": 0x38,
 	"capslock": 0x39,
 	// 功能键
 	"f1": 0x3a, "f2": 0x3b, "f3": 0x3c, "f4": 0x3d, "f5": 0x3e, "f6": 0x3f,
@@ -90,6 +92,12 @@ type Keyboard struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	// 移除 requestChan，改为直接并发处理
+
+	// 记录相关
+	recording  bool
+	recordFile *os.File
+	recordMu   sync.Mutex
+	recordName string
 }
 
 // KeyboardStats 统计信息
@@ -109,6 +117,10 @@ type KeyboardStats struct {
 	ProcessLatency time.Duration   // 实际处理时间
 	NetworkLatency time.Duration   // 网络传输时间
 	LatencyHistory []LatencyRecord // 最近的延迟记录
+
+	// 新增：每个按键最近一次down的时间和持续时长
+	LastKeyDown     map[string]time.Time
+	LastKeyDuration map[string]time.Duration
 }
 
 // LatencyRecord 延迟记录
@@ -123,7 +135,10 @@ func NewKeyboard(driver KeyboardDriver) *Keyboard {
 	ctx, cancel := context.WithCancel(context.Background())
 	k := &Keyboard{
 		driver: driver,
-		stats:  &KeyboardStats{},
+		stats: &KeyboardStats{
+			LastKeyDown:     make(map[string]time.Time),
+			LastKeyDuration: make(map[string]time.Duration),
+		},
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -458,6 +473,15 @@ func (k *Keyboard) KeyDownHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "按键按下失败: "+err.Error(), 500)
 		return
 	}
+
+	// 记录down时间（并发安全）
+	k.stats.mu.Lock()
+	k.stats.LastKeyDown[key] = time.Now()
+	k.stats.mu.Unlock()
+
+	// 记录按键事件
+	k.RecordKeyEvent(key, "down", 0)
+
 	io.WriteString(w, "ok")
 }
 
@@ -487,6 +511,20 @@ func (k *Keyboard) KeyUpHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "按键释放失败: "+err.Error(), 500)
 		return
 	}
+
+	// 计算并记录持续时长（并发安全）
+	k.stats.mu.Lock()
+	downTime, ok := k.stats.LastKeyDown[key]
+	var duration time.Duration
+	if ok {
+		duration = time.Since(downTime)
+		k.stats.LastKeyDuration[key] = duration
+	}
+	k.stats.mu.Unlock()
+
+	// 记录按键事件
+	k.RecordKeyEvent(key, "up", duration)
+
 	io.WriteString(w, "ok")
 }
 
@@ -538,4 +576,102 @@ func (k *Keyboard) Close() error {
 	k.cancel()
 	k.wg.Wait() // 等待所有并发任务完成
 	return k.driver.Close()
+}
+
+// StartRecord 开始记录按键信息
+func (k *Keyboard) StartRecord() (string, error) {
+	k.recordMu.Lock()
+	defer k.recordMu.Unlock()
+	if k.recording {
+		return k.recordName, nil
+	}
+	filename := fmt.Sprintf("key_record_%d.csv", time.Now().Unix())
+	file, err := os.Create(filename)
+	if err != nil {
+		return "", err
+	}
+	writer := csv.NewWriter(file)
+	writer.Write([]string{"time", "key", "action", "duration_ms"})
+	writer.Flush()
+	k.recordFile = file
+	k.recording = true
+	k.recordName = filename
+	return filename, nil
+}
+
+// StopRecord 停止记录
+func (k *Keyboard) StopRecord() error {
+	k.recordMu.Lock()
+	defer k.recordMu.Unlock()
+	if !k.recording {
+		return nil
+	}
+	k.recording = false
+	if k.recordFile != nil {
+		k.recordFile.Close()
+		k.recordFile = nil
+	}
+	k.recordName = ""
+	return nil
+}
+
+// RecordKeyEvent 记录一次按键事件
+func (k *Keyboard) RecordKeyEvent(key, action string, duration time.Duration) {
+	k.recordMu.Lock()
+	defer k.recordMu.Unlock()
+	if !k.recording || k.recordFile == nil {
+		return
+	}
+	writer := csv.NewWriter(k.recordFile)
+	timeStr := time.Now().Format(time.RFC3339Nano)
+	durStr := ""
+	if action == "up" {
+		durStr = fmt.Sprintf("%d", duration.Milliseconds())
+	}
+	writer.Write([]string{timeStr, key, action, durStr})
+	writer.Flush()
+}
+
+// RecordKeysHandler 控制按键记录的接口
+func (k *Keyboard) RecordKeysHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只支持POST", http.StatusMethodNotAllowed)
+		return
+	}
+	type Req struct {
+		Action string `json:"action"`
+	}
+	var req Req
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "JSON解析失败", 400)
+		return
+	}
+	var status string
+	var filename string
+	switch req.Action {
+	case "start":
+		fname, err := k.StartRecord()
+		if err != nil {
+			http.Error(w, "开始记录失败: "+err.Error(), 500)
+			return
+		}
+		status = "recording"
+		filename = fname
+	case "stop":
+		err := k.StopRecord()
+		if err != nil {
+			http.Error(w, "停止记录失败: "+err.Error(), 500)
+			return
+		}
+		status = "stopped"
+		filename = ""
+	default:
+		http.Error(w, "未知操作", 400)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   status,
+		"filename": filename,
+	})
 }

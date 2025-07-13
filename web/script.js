@@ -27,6 +27,10 @@ class PiKeyboard {
         this.requestCount = 0;
         this.debugLogVisible = false;
         this.keyPressStartTimes = {};
+        this.recordButton = document.getElementById('toggleRecord');
+        this.recordFileNameSpan = document.getElementById('recordFileName');
+        this.isRecording = false;
+        this.recordFileName = '';
         
         // 添加日志系统
         this.enableDebugLog();
@@ -198,6 +202,15 @@ class PiKeyboard {
         // 绑定调试按钮事件
         this.debugToggleButton.addEventListener('click', () => {
             this.toggleDebugLog();
+        });
+
+        // 绑定记录按钮事件
+        this.recordButton.addEventListener('click', () => {
+            if (!this.isRecording) {
+                this.startRecord();
+            } else {
+                this.stopRecord();
+            }
         });
         
         // 绑定文本输入框回车事件
@@ -601,6 +614,62 @@ class PiKeyboard {
         const result = await response.text();
         this.log(`📥 响应内容: ${result}`);
         return result;
+    }
+
+    async startRecord() {
+        this.recordButton.textContent = '启动中...';
+        this.recordButton.disabled = true;
+        try {
+            const resp = await fetch(`${this.apiBase}/api/record_keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'start' })
+            });
+            const data = await resp.json();
+            if (data.status === 'recording') {
+                this.isRecording = true;
+                this.recordFileName = data.filename;
+                this.recordButton.textContent = '停止记录';
+                this.recordButton.classList.add('recording');
+                this.recordFileNameSpan.textContent = data.filename;
+                this.log(`🟠 开始记录按键，文件: ${data.filename}`);
+            } else {
+                throw new Error('未能进入记录状态');
+            }
+        } catch (e) {
+            this.log('❌ 启动记录失败: ' + e.message, 'error');
+            this.updateStatus('启动记录失败', 'error');
+        } finally {
+            this.recordButton.disabled = false;
+        }
+    }
+
+    async stopRecord() {
+        this.recordButton.textContent = '停止中...';
+        this.recordButton.disabled = true;
+        try {
+            const resp = await fetch(`${this.apiBase}/api/record_keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'stop' })
+            });
+            const data = await resp.json();
+            if (data.status === 'stopped') {
+                this.isRecording = false;
+                this.recordFileName = '';
+                this.recordButton.textContent = '开始记录按键';
+                this.recordButton.classList.remove('recording');
+                this.recordFileNameSpan.textContent = '';
+                this.log('🟢 停止记录按键');
+            } else {
+                throw new Error('未能停止记录');
+            }
+        } catch (e) {
+            this.log('❌ 停止记录失败: ' + e.message, 'error');
+            this.updateStatus('停止记录失败', 'error');
+        } finally {
+            this.recordButton.disabled = false;
+        }
     }
     
     updateStatus(message, type = 'success') {
