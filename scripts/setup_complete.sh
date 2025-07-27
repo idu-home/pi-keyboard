@@ -25,6 +25,34 @@ sleep 3
 echo "步骤 4: 创建 HID 设备节点..."
 ./create_hid_device.sh
 
+# 4.5. 设置设备权限
+echo "步骤 4.5: 设置设备权限..."
+if [ -e "/dev/hidg0" ]; then
+    # 设置权限让所有用户都能访问
+    chmod 666 /dev/hidg0
+    echo "✓ 设备权限设置完成"
+    ls -la /dev/hidg0
+else
+    echo "✗ 设备节点不存在，无法设置权限"
+fi
+
+# 4.6. 安装 udev 规则
+echo "步骤 4.6: 安装 udev 规则..."
+UDEV_RULES_DIR="/etc/udev/rules.d"
+UDEV_RULES_FILE="$UDEV_RULES_DIR/99-hidg.rules"
+
+if [ -f "99-hidg.rules" ]; then
+    cp 99-hidg.rules "$UDEV_RULES_FILE"
+    echo "✓ udev 规则已安装到 $UDEV_RULES_FILE"
+    
+    # 重新加载 udev 规则
+    udevadm control --reload-rules
+    udevadm trigger
+    echo "✓ udev 规则已重新加载"
+else
+    echo "⚠ udev 规则文件不存在，跳过安装"
+fi
+
 # 5. 最终检查
 echo "步骤 5: 最终检查..."
 if [ -e "/dev/hidg0" ]; then

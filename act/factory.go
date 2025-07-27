@@ -81,8 +81,8 @@ func (f *DriverFactory) hasHIDGadgetSupport(outputFile string) bool {
 		return false
 	}
 
-	// 尝试打开设备文件（只读模式）
-	file, err := os.OpenFile(outputFile, os.O_RDONLY, 0)
+	// 尝试打开设备文件（读写模式）
+	file, err := os.OpenFile(outputFile, os.O_RDWR, 0)
 	if err != nil {
 		return false
 	}
