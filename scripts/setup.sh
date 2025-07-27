@@ -1,7 +1,49 @@
 #!/bin/bash
 
-# 0. 复制脚本
-# /usr/local/bin/setup_pi_keyboard_gadget.sh
+# 0. 清理之前的配置（如果存在）
+cleanup_gadget() {
+    echo "清理之前的 USB gadget 配置..."
+    cd /sys/kernel/config/usb_gadget/
+    if [ -d "pi_keyboard" ]; then
+        # 先解除 UDC 绑定
+        if [ -f "pi_keyboard/UDC" ]; then
+            echo "" > pi_keyboard/UDC 2>/dev/null || true
+        fi
+        
+        # 删除符号链接
+        if [ -L "pi_keyboard/configs/c.1/hid.usb0" ]; then
+            rm pi_keyboard/configs/c.1/hid.usb0
+        fi
+        
+        # 删除整个 gadget 目录
+        rm -rf pi_keyboard
+        echo "已清理旧的 pi_keyboard gadget"
+    fi
+}
+
+# 执行清理
+cleanup_gadget
+
+# 检查 UDC 可用性
+check_udc() {
+    echo "检查可用的 UDC..."
+    if [ ! -d "/sys/class/udc" ]; then
+        echo "错误: /sys/class/udc 目录不存在"
+        exit 1
+    fi
+    
+    UDC_COUNT=$(ls /sys/class/udc | wc -l)
+    if [ "$UDC_COUNT" -eq 0 ]; then
+        echo "错误: 没有可用的 UDC"
+        echo "请确保启用了 USB OTG 功能"
+        exit 1
+    fi
+    
+    echo "找到 $UDC_COUNT 个可用的 UDC:"
+    ls /sys/class/udc
+}
+
+check_udc
 
 # 1. 加载模块
 modprobe libcomposite
@@ -38,4 +80,18 @@ echo -ne '\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x
 ln -s functions/hid.usb0 configs/c.1/
 
 # 7. 绑定 UDC
-ls /sys/class/udc > UDC
+echo "绑定 UDC..."
+UDC_NAME=$(ls /sys/class/udc | head -1)
+if [ -z "$UDC_NAME" ]; then
+    echo "错误: 没有找到可用的 UDC"
+    exit 1
+fi
+
+echo "$UDC_NAME" > UDC
+if [ $? -eq 0 ]; then
+    echo "成功绑定 UDC: $UDC_NAME"
+    echo "USB HID Keyboard gadget 已激活"
+else
+    echo "错误: 绑定 UDC 失败"
+    exit 1
+fi
