@@ -95,3 +95,32 @@ else
     echo "错误: 绑定 UDC 失败"
     exit 1
 fi
+
+# 8. 检查设备节点
+echo "检查 HID 设备节点..."
+sleep 2  # 等待设备节点创建
+
+if [ -e "/dev/hidg0" ]; then
+    echo "✓ HID 设备节点 /dev/hidg0 已创建"
+    ls -la /dev/hidg0
+else
+    echo "⚠ HID 设备节点 /dev/hidg0 未找到"
+    echo "尝试手动创建设备节点..."
+    
+    # 查找 HID function 的主次设备号
+    if [ -e "/sys/kernel/config/usb_gadget/pi_keyboard/functions/hid.usb0/dev" ]; then
+        DEV_NUMBERS=$(cat /sys/kernel/config/usb_gadget/pi_keyboard/functions/hid.usb0/dev)
+        if [ ! -z "$DEV_NUMBERS" ]; then
+            echo "找到设备号: $DEV_NUMBERS"
+            # 创建设备节点
+            mknod /dev/hidg0 c $DEV_NUMBERS 2>/dev/null || echo "创建设备节点失败，可能需要手动创建"
+        fi
+    fi
+    
+    echo "如果设备节点仍未创建，请手动执行："
+    echo "1. 查找设备号: cat /sys/kernel/config/usb_gadget/pi_keyboard/functions/hid.usb0/dev"
+    echo "2. 创建设备节点: sudo mknod /dev/hidg0 c <主设备号> <次设备号>"
+    echo "3. 设置权限: sudo chmod 666 /dev/hidg0"
+fi
+
+echo "设置完成！"
